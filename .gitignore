@@ -1,0 +1,17 @@
+# Python 
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# backEnd secrets
+.env
+*.env.local
+
+# systemFiles macOS
+.DS_Store
+
+# Go
+backend/backend
+*.exe
+*.bin
