@@ -3,35 +3,59 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/png" href="favicon.ico" />
+    <link class="w-6 h-6" rel="icon" type="image/png" href="favicon.ico" />
     <title>Smart Home Dashboard PRO</title>
-    <script src="https://cdn.tailwindcss.com"></script>
   </head>
-  <body class="bg-slate-900 text-white font-sans min-h-screen flex flex-col">
+  <body
+    class="bg-slate-950 text-slate-100 font-sans min-h-screen flex flex-col transition-colors duration-500"
+  >
     <div class="container mx-auto px-4 py-8 flex-grow">
-      <header class="flex justify-between items-center mb-10 border-b border-slate-200 dark:border-slate-800 pb-5 transition-colors">
-    <div class="flex items-center gap-3">
-        <h1 class="text-3xl font-extrabold text-slate-900 dark:text-emerald-400 tracking-tight transition-colors">SmartHome OS</h1>
-        <span class="text-xs font-bold bg-slate-100 dark:bg-emerald-500/10 text-slate-600 dark:text-emerald-400 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-emerald-500/20 transition-all">PRO</span>
-    </div>
-    
-    <div class="flex items-center gap-3">
-        <button id="theme-btn" class="w-9 h-9 flex items-center justify-center bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-lg rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm transition-all active:scale-95"></button>
+      <header
+        class="flex justify-between items-center mb-10 border-b border-slate-200 dark:border-slate-800/80 pb-5 transition-colors"
+      >
+        <div class="flex items-center gap-3">
+          <h1
+            class="text-3xl font-extrabold text-slate-900 dark:text-emerald-400 tracking-tight transition-colors"
+          >
+            SmartHome OS
+          </h1>
+          <span
+            class="text-xs font-bold bg-slate-100 dark:bg-emerald-500/10 text-slate-600 dark:text-emerald-400 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-emerald-500/20 transition-all"
+            >PRO</span
+          >
+        </div>
 
-        <select id="lang-select" class="bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-sm font-medium focus:outline-none focus:border-emerald-500 transition-all cursor-pointer shadow-sm">
+        <div class="flex items-center gap-3">
+          <button
+            id="theme-btn"
+            class="w-9 h-9 flex items-center justify-center bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-lg rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm transition-all active:scale-95"
+          ></button>
+
+          <select
+            id="lang-select"
+            class="bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-sm font-medium focus:outline-none focus:border-emerald-500 transition-all cursor-pointer shadow-sm"
+          >
             <option value="ru">🇷🇺 RU</option>
             <option value="et">🇪🇪 ET</option>
             <option value="en">🇬🇧 EN</option>
-        </select>
+          </select>
 
-        <div id="status" class="text-xs font-medium" data-i18n="statusLoading">
+          <div
+            id="status"
+            class="text-xs font-medium"
+            data-i18n="statusLoading"
+          >
             Загрузка...
-        </div>
-        <button id="logout-btn" class="hidden text-xs font-semibold bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-rose-200 dark:hover:border-rose-900/50 transition-all" data-i18n="logoutBtn">
+          </div>
+          <button
+            id="logout-btn"
+            class="hidden text-xs font-semibold bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-rose-200 dark:hover:border-rose-900/50 transition-all"
+            data-i18n="logoutBtn"
+          >
             Выйти
-        </button>
-    </div>
-</header>
+          </button>
+        </div>
+      </header>
 
       <section
         id="login-section"
@@ -92,6 +116,6 @@
       </main>
     </div>
 
-    <script type="module" src="js/main.js"></script>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
