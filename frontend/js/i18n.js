@@ -81,7 +81,9 @@ export function getCurrentLang() {
 export function setLang(lang) {
   if (translations[lang]) {
     localStorage.setItem(LANG_KEY, lang);
-    // If a grid listener is registered, execute it immediately on switch
+
+    translatePage();
+
     if (typeof onLanguageChangeCallback === "function") {
       onLanguageChangeCallback(lang);
     }

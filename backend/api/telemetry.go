@@ -17,7 +17,8 @@ import (
 )
 
 /**
- * GetTelemetry handles user-specific room data and couples it with MongoDB stream logs
+ * GetTelemetry handles user-specific room data and couples it with MongoDB stream logs.
+ * Enforces deterministic sorting to prevent UI layout shifts during runtime polling cycles.
  */
 func GetTelemetry(db *sql.DB, mongoColl *mongo.Collection) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -37,8 +38,8 @@ func GetTelemetry(db *sql.DB, mongoColl *mongo.Collection) gin.HandlerFunc {
 			return
 		}
 
-		// EXTENDED QUERY: Added target_temperature retrieval directly from PostgreSQL
-		rows, err := tx.Query("SELECT id, name, target_temperature FROM rooms")
+		// FIXED: Added ORDER BY id ASC to preserve strict card order on the frontend UI
+		rows, err := tx.Query("SELECT id, name, target_temperature FROM rooms ORDER BY id ASC")
 		if err != nil {
 			fmt.Println("❌ POSTGRESQL QUERY ERROR:", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "DB error"})
@@ -116,8 +117,9 @@ func UpdateTargetTemperature(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		// FIXED: Removed strict binding required check to handle float numeric allocations cleanly
 		var input struct {
-			TargetTemperature float64 `json:"target_temperature" binding:"required"`
+			TargetTemperature float64 `json:"target_temperature"`
 		}
 
 		if err := c.ShouldBindJSON(&input); err != nil {

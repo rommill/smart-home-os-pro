@@ -15,7 +15,7 @@ export function renderClimateControlPanel(roomId, targetTemp) {
     <div class="climate-control max-h-0 group-[.is-active]:max-h-40 overflow-hidden transition-all duration-500 ease-in-out border-t border-transparent group-[.is-active]:border-slate-100 group-[.is-active]:dark:border-slate-800/50 group-[.is-active]:mt-2">
         <div class="pt-4">
             <div class="flex justify-between items-center mb-2">
-                <span class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">${labelText}</span>
+                <span data-i18n="targetTemp" class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">${labelText}</span>
                 <span class="text-sm font-mono font-bold text-sky-500 dark:text-sky-400" id="target-val-${roomId}">${targetTemp}°C</span>
             </div>
             <input 

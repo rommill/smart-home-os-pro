@@ -8,6 +8,6 @@ type RoomData struct {
 	Name              map[string]string `json:"name"`
 	Temperature       string            `json:"temperature"`
 	LastUpdate        time.Time         `json:"last_update"`
-	TargetTemperature float64           `json:"target_temperature"` // This field was missing!
-	AcStatus          bool              `json:"ac_status"`          // Ready for AC automation
+	TargetTemperature float64           `json:"target_temperature" bson:"target_temperature"`
+	AcStatus          bool              `json:"ac_status"`          
 }

@@ -26,7 +26,7 @@ window.updateTargetTemperature = async function (roomId, value) {
   }
 
   try {
-    // Just send the value straight to the Go backend and PostgreSQL DB
+    // Go backend and MongoDB
     await updateTargetTemperatureRequest(roomId, value, token);
     console.log(
       `[Climate Control] Room ${roomId} target temperature updated to ${value}°C`,
