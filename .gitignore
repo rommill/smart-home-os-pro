@@ -4,14 +4,24 @@ venv/
 __pycache__/
 *.pyc
 
-# backEnd secrets
+# Environment Secrets
 .env
 *.env.local
+.env.production
 
-# systemFiles macOS
+# System Files
 .DS_Store
+Thumbs.db
 
-# Go
+# Go Build Artifacts
 backend/backend
+backend/main
+main
 *.exe
 *.bin
+*.out
+
+# Frontend Dependency & Build Trashes
+node_modules/
+dist/
+.pnpm-debug.log
