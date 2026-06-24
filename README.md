@@ -1,134 +1,163 @@
+# Smart Home OS Pro
+
+[![Tech Stack](https://img.shields.io/badge/Stack-Fullstack--Hybrid-blue)]()
+[![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk)](https://openjdk.org/)
+[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go)](https://go.dev/)
+[![React](https://img.shields.io/badge/React-18--TypeScript-61DAFB?logo=react)]()
+[![Docker](https://img.shields.io/badge/Infrastructure-Docker--Compose-blue?logo=docker)]()
+
+An enterprise-grade, hybrid-architecture Smart Home platform engineered for high-throughput IoT data ingestion, real-time device isolation, and telemetry visualization.
+
+This project demonstrates production-ready microservice synchronization using standard industry patterns, strict type-safety, and secure user-data boundaries.
+
+---
+
+## System Architecture & Service Split
+
+The platform is explicitly designed with a **CQRS-inspired hybrid architecture** to optimize resource utilization and isolate domains:
+
+```text
+                      +---------------------------------------+
+                      |       Frontend (React + TypeScript)   |
+                      +-------------------+-------------------+
+                                          |
+                        HTTP / REST (JWT) | (Event Streaming)
+                                          v
++-----------------------------------------+-----------------------------------------+
+| [Command & Control Layer]                                                         |
+|                                                                                   |
+|  +---------------------------+              +----------------------------------+  |
+|  |  backend-spring (Java 21) | -----------> |     PostgreSQL (smart_home_db)   |  |
+|  +---------------------------+              +----------------------------------+  |
+|    - User Management & Auth (JWT)                                  ^              |
+|    - Device CRUD & Metadata                                        |              |
++--------------------------------------------------------------------|--------------+
+                                                                     |
++--------------------------------------------------------------------|--------------+
+| [High-Throughput Ingestion Layer]                                  |              |
+|                                                                    |              |
+|  +---------------------------+              +----------------------+---------+    |
+|  |       backend (Go)        | ------------ |     MQTT Broker (Mosquitto)    |    |
+|  +---------------------------+              +----------------------+---------+    |
+|    - Lightweight MQTT Ingestion                                    ^              |
+|    - Fast Real-Time Processing                                     |              |
++--------------------------------------------------------------------|--------------+
+                                                                     |
+                                              +----------------------+---------+    |
+                                              |    Python Climate Emulator     |    |
+                                              +--------------------------------+    |
 
 ```
-smart-home-os-pro
-├─ backend
-│  ├─ api
-│  │  ├─ auth.go
-│  │  ├─ handlers_test.go
-│  │  ├─ middleware.go
-│  │  └─ telemetry.go
-│  ├─ db
-│  │  └─ db.go
-│  ├─ go.mod
-│  ├─ go.sum
-│  └─ models
-│     └─ telemetry.go
-├─ backend-spring
-│  ├─ .gradle
-│  │  ├─ 9.5.1
-│  │  │  ├─ checksums
-│  │  │  │  └─ checksums.lock
-│  │  │  ├─ executionHistory
-│  │  │  │  └─ executionHistory.lock
-│  │  │  ├─ expanded
-│  │  │  ├─ fileChanges
-│  │  │  ├─ fileHashes
-│  │  │  │  └─ fileHashes.lock
-│  │  │  ├─ gc.properties
-│  │  │  └─ vcsMetadata
-│  │  ├─ buildOutputCleanup
-│  │  │  ├─ buildOutputCleanup.lock
-│  │  │  └─ cache.properties
-│  │  ├─ file-system.probe
-│  │  └─ vcs-1
-│  │     └─ gc.properties
-│  ├─ HELP.md
-│  ├─ bin
-│  │  ├─ default
-│  │  ├─ generated-sources
-│  │  │  └─ annotations
-│  │  ├─ generated-test-sources
-│  │  │  └─ annotations
-│  │  └─ test
-│  │     └─ com
-│  │        └─ smarthome
-│  │           └─ backend_spring
-│  │              ├─ BackendSpringApplicationTests.class
-│  │              └─ service
-│  │                 └─ DeviceServiceTest.class
-│  ├─ build
-│  │  ├─ classes
-│  │  │  └─ java
-│  │  ├─ generated
-│  │  │  └─ sources
-│  │  │     ├─ annotationProcessor
-│  │  │     │  └─ java
-│  │  │     └─ headers
-│  │  │        └─ java
-│  │  ├─ resolvedMainClassName
-│  │  ├─ resources
-│  │  └─ tmp
-│  │     └─ compileJava
-│  │        └─ compileTransaction
-│  │           ├─ backup-dir
-│  │           └─ stash-dir
-│  │              ├─ DeviceController.class.uniqueId0
-│  │              └─ SecurityConfig.class.uniqueId1
-│  ├─ build.gradle
-│  ├─ gradle
-│  │  └─ wrapper
-│  │     ├─ gradle-wrapper.jar
-│  │     └─ gradle-wrapper.properties
-│  ├─ gradlew
-│  ├─ gradlew.bat
-│  ├─ settings.gradle
-│  └─ src
-│     └─ test
-│        └─ java
-│           └─ com
-│              └─ smarthome
-│                 └─ backend_spring
-│                    ├─ BackendSpringApplicationTests.java
-│                    └─ service
-│                       └─ DeviceServiceTest.java
-├─ climate_emulator.py
-├─ docker-compose.yml
-├─ frontend
-│  ├─ favicon.ico
-│  ├─ index.html
-│  ├─ js
-│  │  ├─ api.js
-│  │  ├─ auth.js
-│  │  ├─ i18n.js
-│  │  ├─ render.js
-│  │  ├─ theme.js
-│  │  └─ utils
-│  │     ├─ ac.js
-│  │     ├─ authUi.js
-│  │     ├─ icons.js
-│  │     ├─ slider.js
-│  │     ├─ statusUi.js
-│  │     └─ weather.js
-│  ├─ package.json
-│  ├─ pnpm-lock.yaml
-│  ├─ src
-│  │  ├─ api
-│  │  │  ├─ api.js
-│  │  │  └─ api.ts
-│  │  ├─ auth
-│  │  │  ├─ auth.js
-│  │  │  └─ auth.ts
-│  │  ├─ i18n
-│  │  │  ├─ i18n.js
-│  │  │  └─ i18n.ts
-│  │  ├─ index.css
-│  │  ├─ render
-│  │  │  ├─ climate.js
-│  │  │  ├─ climate.ts
-│  │  │  ├─ render.js
-│  │  │  ├─ render.ts
-│  │  │  ├─ utils.js
-│  │  │  └─ utils.ts
-│  │  ├─ theme
-│  │  │  ├─ theme.js
-│  │  │  └─ theme.ts
-│  │  ├─ types
-│  │  │  ├─ telemetry.js
-│  │  │  └─ telemetry.ts
-│  │  └─ vite-env.d.ts
-│  ├─ tsconfig.json
-│  └─ vite.config.ts
-├─ mosquitto.conf
-└─ structure.txt
+
+### Architectural Decisions (Why this stack?)
+
+- **Spring Boot (`backend-spring`):** Serves as the core administrative and identity provider. It handles enterprise-level security, JWT parsing, data validation, and core relational business logic.
+- **Go (`backend`):** Functions as an ultra-lightweight, reactive telemetry ingestion engine. Handling high-frequency MQTT message streams from hundreds of IoT sensors via a heavy framework is resource-inefficient; Go provides near-zero memory footprint and optimal throughput.
+- **MQTT (Mosquitto):** Utilized as the industrial standard for low-overhead, pub/sub communication, perfectly mimicking real hardware network limitations.
+
+---
+
+## Key Features
+
+- **Strict Device Isolation (Multi-Tenancy):** Devices are securely mapped to verified user identities extracted directly from valid JWT claims. One user can never access or modify another user's IoT fleet.
+- **Dual-Protocol Synchronicity:** Synchronous operations (Authentication, Asset management) run over REST API, while asynchronous data streams (Telemetry) are piped via MQTT.
+- **Automated Sensor Simulation:** Includes a native Python emulator that mimics real-world climate shifts and broadcasts state-packets.
+- **Internationalization (i18n):** Production-ready UI localized with multi-language support from the ground up.
+
+---
+
+## Technology Stack
+
+- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, i18next
+- **Administrative Backend:** Java 21, Spring Boot 4.0, Spring Security (Stateless JWT), Hibernate/JPA
+- **Ingestion Backend:** Go (Golang), Eclipse Paho MQTT
+- **Infrastructure & Messaging:** Docker, Docker Compose, Eclipse Mosquitto MQTT Broker
+- **Databases:** PostgreSQL (Production-grade relational state), Redis, SQLite
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Docker & Docker Compose installed
+- Java 21 & Go SDK (Optional, for local bare-metal testing)
+
+### Installation & Launch
+
+Clone the repository:
+
+```bash
+git clone https://github.com/rommill/smart-home-os-pro.git
+cd smart-home-os-pro
 
 ```
+
+Spin up the entire containerized infrastructure (Database, Broker, Backends, Emulator):
+
+```bash
+docker compose up --build
+
+```
+
+---
+
+## API & Documentation
+
+Once the services are active, the fully interactive **OpenAPI / Swagger UI** configuration is automatically exposed:
+
+**URL:** `http://localhost:8082/swagger-ui/index.html`
+
+### Target Integration Example: Authenticating Requests
+
+To execute secure requests (`POST /api/devices`), authenticate first via the auth endpoint to receive your Bearer Token:
+
+**`POST /api/auth/login`**
+
+```json
+{
+  "username": "roman",
+  "password": "your_secure_password"
+}
+```
+
+**Response:**
+
+```json
+{
+  "token": "eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJyb21hbi..."
+}
+```
+
+_Pass this token inside Swagger UI via the top-right **Authorize** lock button to clear the security filter container._
+
+---
+
+## Testing
+
+Both backend segments include comprehensive suites covering validation rules, business operations, and mock integration points.
+
+**Execute Spring Boot Unit/Integration Tests:**
+
+```bash
+cd backend-spring
+./gradlew test
+
+```
+
+**Execute Go Telemetry Tests:**
+
+```bash
+cd backend
+go test ./...
+
+```
+
+---
+
+## Roadmap & Production Hardening
+
+- [ ] Implement **Refresh Token** mechanics to complement short-lived access JWTs.
+- [ ] Integrate Role-Based Access Control (RBAC) layers inside Spring Security.
+- [ ] Implement a full **CI/CD Pipeline** using GitHub Actions for multi-architecture Docker builds.
+- [ ] Introduce horizontal scaling policies and a resilient persistent storage engine cluster.

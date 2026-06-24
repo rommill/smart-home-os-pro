@@ -25,3 +25,12 @@ main
 node_modules/
 dist/
 .pnpm-debug.log
+
+# ==========================================
+# Java & Gradle Artifacts (backend-spring)
+# ==========================================
+backend-spring/.gradle/
+backend-spring/build/
+backend-spring/bin/
+backend-spring/out/
+backend-spring/.idea/
