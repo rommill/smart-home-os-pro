@@ -1,6 +1,5 @@
 import { t } from "../i18n.js";
 
-// Модуль управления верхним статус-баром системы
 export function updateStatus(textKey, type = "info", isRawText = false) {
   const statusEl = document.getElementById("status");
   if (!statusEl) return;
