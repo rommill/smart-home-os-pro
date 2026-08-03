@@ -65,7 +65,7 @@ const translations = {
     noData: "No data",
     noRooms: "No rooms or sensors available",
     updated: "Updated",
-    targetTemp: "Target Temperature:", // Added missing key
+    targetTemp: "Target Temperature:",
   },
 };
 

@@ -1,6 +1,9 @@
 version: "3.8"
 
 services:
+  # ---------------------------------------------------------------------------
+  # Relational Database (PostgreSQL)
+  # ---------------------------------------------------------------------------
   db_relational:
     image: postgres:16-alpine
     container_name: smart_postgres
@@ -13,7 +16,16 @@ services:
       - "5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d smart_home_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
+  # ---------------------------------------------------------------------------
+  # Document / NoSQL Database (MongoDB)
+  # ---------------------------------------------------------------------------
   db_nosql:
     image: mongo:7.0
     container_name: smart_mongo
@@ -22,7 +34,16 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
+  # ---------------------------------------------------------------------------
+  # MQTT Message Broker (Eclipse Mosquitto)
+  # ---------------------------------------------------------------------------
   broker:
     image: eclipse-mosquitto:2.0
     container_name: smart_broker
@@ -32,6 +53,53 @@ services:
       - "9001:9001"
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$SYS/#", "-n", "1"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # Core Administrative Backend (Spring Boot 4.0 / Java 21)
+  # ---------------------------------------------------------------------------
+  backend_spring:
+    build:
+      context: ./backend-spring
+      dockerfile: Dockerfile
+    container_name: smart_spring
+    restart: always
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db_relational:5432/smart_home_db
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: smart_password
+    depends_on:
+      db_relational:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # High-Throughput Telemetry Ingestion Engine (Go)
+  # ---------------------------------------------------------------------------
+  backend_go:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: smart_go
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      POSTGRES_URL: postgres://admin:smart_password@db_relational:5432/smart_home_db?sslmode=disable
+      MONGO_URI: mongodb://db_nosql:27017
+      MQTT_BROKER_URL: tcp://broker:1883
+    depends_on:
+      db_relational:
+        condition: service_healthy
+      db_nosql:
+        condition: service_healthy
+      broker:
+        condition: service_healthy
 
 volumes:
   pg_data:

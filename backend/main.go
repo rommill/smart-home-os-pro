@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt" // Добавился импорт fmt для логов миграции
+	"fmt" 
 	"os"
 	"smart-home/api"
 	"smart-home/db"
@@ -16,15 +16,13 @@ func main() {
 	mongoClient := db.InitMongo(os.Getenv("MONGO_URI"))
 	mongoColl := mongoClient.Database("smart_home").Collection("telemetry")
 
-	// --- АВТО-МИГРАЦИЯ БАЗЫ ДАННЫХ (НАШЕ ИСПРАВЛЕНИЕ) ---
-	// Этот код сам добавит колонку target_temperature в PostgreSQL, если её там ещё нет!
 	_, migrationErr := pgDB.Exec(`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS target_temperature DOUBLE PRECISION DEFAULT 23.0;`)
 	if migrationErr != nil {
 		fmt.Println("⚠️ Migration warning/error:", migrationErr)
 	} else {
 		fmt.Println("✅ PostgreSQL structure verified successfully (target_temperature column active)")
 	}
-	// ----------------------------------------------------
+	
 
 	r := gin.Default()
 
