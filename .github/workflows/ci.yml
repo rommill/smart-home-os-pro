@@ -27,8 +27,7 @@ jobs:
 
       - name: Execute Gradle Tests
         run: |
-          cd backend-spring
-          ./gradlew test
+          ./backend-spring/gradlew -p backend-spring test
 
   # 2. Go Telemetry Engine Testing
   test-go:
