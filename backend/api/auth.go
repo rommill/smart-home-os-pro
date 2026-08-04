@@ -53,10 +53,20 @@ func Login(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Заглушка аутентификации с использованием передаваемой БД
-		// Позже здесь добавим выборку пользователя из db и проверку через CheckPasswordHash
-		_ = db // временно заглушаем неиспользуемую переменную
+		// TODO: В будущем здесь будет проверка по базе данных через CheckPasswordHash
+		_ = db 
 
-		c.JSON(http.StatusOK, gin.H{"message": "Login successful"})
+		// Генерируем JWT для пользователя (например, ID = 1)
+		token, err := GenerateJWT(1)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+			return
+		}
+
+		// Возвращаем токен в ответе
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Login successful",
+			"token":   token,
+		})
 	}
 }

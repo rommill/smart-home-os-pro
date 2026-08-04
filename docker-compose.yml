@@ -48,7 +48,8 @@ services:
     ports:
       - "1883:1883"
       - "9001:9001"
-    # Простой healthcheck через nc (netcat) или mosquitto_sub:
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 1883 || exit 1"]
       interval: 5s

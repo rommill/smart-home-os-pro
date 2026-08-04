@@ -1,0 +1,96 @@
+package mqtt
+
+import (
+	"context"
+	"encoding/json"
+	"log"
+	"os"
+	"time"
+
+	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"go.mongodb.org/mongo-driver/mongo"
+)
+
+// TelemetryPayload represents incoming sensor metrics from devices
+type TelemetryPayload struct {
+	DeviceID   string                 `json:"device_id" bson:"device_id"`
+	SensorType string                 `json:"sensor_type" bson:"sensor_type"`
+	Value      float64                `json:"value" bson:"value"`
+	Unit       string                 `json:"unit" bson:"unit"`
+	Timestamp  int64                  `json:"timestamp" bson:"timestamp"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
+}
+
+var mongoCollection *mongo.Collection
+
+var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
+	var payload TelemetryPayload
+	err := json.Unmarshal(msg.Payload(), &payload)
+	if err != nil {
+		log.Printf("⚠️ [MQTT Error] Failed to parse payload from topic %s: %v", msg.Topic(), err)
+		return
+	}
+
+	if payload.Timestamp == 0 {
+		payload.Timestamp = time.Now().Unix()
+	}
+
+	log.Printf("📡 [MQTT Received] Topic: %s | Device: %s | %s: %.2f %s",
+		msg.Topic(), payload.DeviceID, payload.SensorType, payload.Value, payload.Unit)
+
+	// Save incoming telemetry into MongoDB time-series collection
+	if mongoCollection != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		_, err := mongoCollection.InsertOne(ctx, payload)
+		if err != nil {
+			log.Printf("❌ [MongoDB Error] Failed to insert telemetry: %v", err)
+		} else {
+			log.Printf("💾 [MongoDB] Ingested telemetry for device: %s", payload.DeviceID)
+		}
+	}
+}
+
+var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
+	log.Println("✅ [MQTT] Successfully connected to broker!")
+
+	topic := "home/+/telemetry"
+	token := client.Subscribe(topic, 1, messagePubHandler)
+	token.Wait()
+	if token.Error() != nil {
+		log.Printf("❌ [MQTT Error] Failed to subscribe to topic %s: %v", topic, token.Error())
+	} else {
+		log.Printf("🎧 [MQTT] Subscribed to topic pattern: %s", topic)
+	}
+}
+
+var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err error) {
+	log.Printf("⚠️ [MQTT Warning] Connection lost: %v", err)
+}
+
+// InitMQTT sets up client options and connects to the broker
+func InitMQTT(coll *mongo.Collection) mqtt.Client {
+	mongoCollection = coll
+
+	brokerURL := os.Getenv("MQTT_BROKER_URL")
+	if brokerURL == "" {
+		brokerURL = "tcp://localhost:1883"
+	}
+
+	opts := mqtt.NewClientOptions()
+	opts.AddBroker(brokerURL)
+	opts.SetClientID("smart_home_go_engine")
+	opts.SetOnConnectHandler(connectHandler)
+	opts.SetConnectionLostHandler(connectLostHandler)
+	opts.SetKeepAlive(60 * time.Second)
+	opts.SetPingTimeout(10 * time.Second)
+	opts.SetAutoReconnect(true)
+
+	client := mqtt.NewClient(opts)
+	if token := client.Connect(); token.Wait() && token.Error() != nil {
+		log.Printf("❌ [MQTT Error] Failed to connect: %v", token.Error())
+	}
+
+	return client
+}
