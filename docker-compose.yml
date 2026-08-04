@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # ---------------------------------------------------------------------------
   # Relational Database (PostgreSQL)
@@ -47,17 +45,15 @@ services:
   broker:
     image: eclipse-mosquitto:2.0
     container_name: smart_broker
-    restart: always
     ports:
       - "1883:1883"
       - "9001:9001"
-    volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+    # Простой healthcheck через nc (netcat) или mosquitto_sub:
     healthcheck:
-      test: ["CMD", "mosquitto_sub", "-t", "$SYS/#", "-n", "1"]
+      test: ["CMD-SHELL", "nc -z localhost 1883 || exit 1"]
       interval: 5s
       timeout: 3s
-      retries: 3
+      retries: 5
 
   # ---------------------------------------------------------------------------
   # Core Administrative Backend (Spring Boot 4.0 / Java 21)
