@@ -6,8 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"smart-home/models"
 	"time"
+
+	"smart-home/models"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
@@ -18,7 +19,6 @@ import (
 
 /**
  * GetTelemetry handles user-specific room data and couples it with MongoDB stream logs.
- * Enforces deterministic sorting to prevent UI layout shifts during runtime polling cycles.
  */
 func GetTelemetry(db *sql.DB, mongoColl *mongo.Collection) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -31,14 +31,12 @@ func GetTelemetry(db *sql.DB, mongoColl *mongo.Collection) gin.HandlerFunc {
 		}
 		defer tx.Rollback()
 
-		// Secure RLS context binding for PostgreSQL isolation rules
 		_, err = tx.Exec("SELECT set_config('app.current_user_id', $1, true)", fmt.Sprintf("%v", userID))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "RLS context error"})
 			return
 		}
 
-		// FIXED: Added ORDER BY id ASC to preserve strict card order on the frontend UI
 		rows, err := tx.Query("SELECT id, name, target_temperature FROM rooms ORDER BY id ASC")
 		if err != nil {
 			fmt.Println("❌ POSTGRESQL QUERY ERROR:", err)
@@ -52,7 +50,7 @@ func GetTelemetry(db *sql.DB, mongoColl *mongo.Collection) gin.HandlerFunc {
 		for rows.Next() {
 			var id int
 			var nameBytes []byte
-			var targetTemp sql.NullFloat64 // Using NullFloat64 in case database field has null values
+			var targetTemp sql.NullFloat64
 
 			if err := rows.Scan(&id, &nameBytes, &targetTemp); err != nil {
 				fmt.Println("❌ SCAN ERROR:", err)
@@ -64,10 +62,11 @@ func GetTelemetry(db *sql.DB, mongoColl *mongo.Collection) gin.HandlerFunc {
 				nameMap = map[string]string{"en": string(nameBytes), "ru": string(nameBytes)}
 			}
 
-			// High frequency monitoring node extraction out of Mongo cluster logs
 			var lastEntry bson.M
 			opts := options.FindOne().SetSort(bson.M{"timestamp": -1})
-			err := mongoColl.FindOne(context.TODO(), bson.M{"device_id": id}, opts).Decode(&lastEntry)
+			
+			
+			err := mongoColl.FindOne(context.TODO(), bson.M{"device_id": fmt.Sprintf("%d", id)}, opts).Decode(&lastEntry)
 
 			temp := "N/A"
 			lastTime := time.Time{}
@@ -78,13 +77,11 @@ func GetTelemetry(db *sql.DB, mongoColl *mongo.Collection) gin.HandlerFunc {
 				}
 			}
 
-			// Fallback to default 23.0 if database returns NULL/empty
 			finalTargetTemp := 23.0
 			if targetTemp.Valid {
 				finalTargetTemp = targetTemp.Float64
 			}
 
-			// Populating unified structural domain entities back to client views
 			results = append(results, models.RoomData{
 				ID:                id,
 				Name:              nameMap,
@@ -104,7 +101,7 @@ func GetTelemetry(db *sql.DB, mongoColl *mongo.Collection) gin.HandlerFunc {
 }
 
 /**
- * UpdateTargetTemperature safely updates room temperature parameters using implicit RLS policies
+ * UpdateTargetTemperature safely updates room temperature parameters
  */
 func UpdateTargetTemperature(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -117,7 +114,6 @@ func UpdateTargetTemperature(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// FIXED: Removed strict binding required check to handle float numeric allocations cleanly
 		var input struct {
 			TargetTemperature float64 `json:"target_temperature"`
 		}
@@ -127,7 +123,6 @@ func UpdateTargetTemperature(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Using full RLS boundaries for write transactions to maintain absolute isolation
 		tx, err := db.Begin()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction start error"})
@@ -141,7 +136,6 @@ func UpdateTargetTemperature(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Updating parameters securely. RLS policy will automatically reject changes if this room doesn't belong to the user
 		query := `UPDATE rooms SET target_temperature = $1 WHERE id = $2`
 		result, err := tx.Exec(query, input.TargetTemperature, roomID)
 		if err != nil {
@@ -166,5 +160,38 @@ func UpdateTargetTemperature(db *sql.DB) gin.HandlerFunc {
 			"room_id":            roomID,
 			"target_temperature": input.TargetTemperature,
 		})
+	}
+}
+
+/**
+ * ReceiveTelemetry принимает данные от BLE
+ */
+func ReceiveTelemetry(mongoColl *mongo.Collection) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var input models.BLETelemetryInput
+
+		if err := c.ShouldBindJSON(&input); err != nil {
+			fmt.Println("❌ INVALID JSON FROM BLE BRIDGE:", err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload format"})
+			return
+		}
+
+		fmt.Printf("🌡️ [GO API] Received BLE Telemetry: Device=%s | Temp=%.2f°C | Hum=%.2f%% | Batt=%d%%\n",
+			input.DeviceID, input.Temperature, input.Humidity, input.Battery)
+
+		if mongoColl != nil {
+			doc := bson.M{
+				"device_id":   input.DeviceID,
+				"value":       input.Temperature,
+				"humidity":    input.Humidity,
+				"battery":     input.Battery,
+				"sensor_type": input.SensorType,
+				"rssi":        input.RSSI,
+				"timestamp":   primitive.NewDateTimeFromTime(time.Unix(input.Timestamp, 0)),
+			}
+			_, _ = mongoColl.InsertOne(context.TODO(), doc)
+		}
+
+		c.JSON(http.StatusOK, gin.H{"status": "success"})
 	}
 }

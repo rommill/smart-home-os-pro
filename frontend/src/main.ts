@@ -3,17 +3,17 @@ import {
   loginRequest,
   fetchTelemetry,
   updateTargetTemperatureRequest,
-} from "./api/api.js";
-import { getToken, saveToken, removeToken, isAuthorized } from "./auth/auth.js";
-import { updateStatus, renderRooms, toggleAuthView } from "./render/render.js";
+} from "./api/api";
+import { getToken, saveToken, removeToken, isAuthorized } from "./auth/auth";
+import { updateStatus, renderRooms, toggleAuthView } from "./render/render";
 import {
   getCurrentLang,
   setLang,
   translatePage,
   registerLangChangeListener,
-} from "./i18n/i18n.js";
-import { initTheme, toggleTheme } from "./theme/theme.js";
-import { RoomData } from "./types/telemetry.js";
+} from "./i18n/i18n";
+import { initTheme, toggleTheme } from "./theme/theme";
+import { RoomData } from "./types/telemetry";
 
 // Enforce strict typing for background polling routines
 let telemetryInterval: number | null = null;

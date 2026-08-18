@@ -35,3 +35,36 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# Node / React / Vite
+node_modules/
+dist/
+build/
+.pnpm-store/
+*.log
+
+# Python / BLE Bridge
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+
+# Go / Binaries
+*.exe
+*.exe-
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+smart-home-os-pro
+
+# Environment & Secrets
+.env
+.env.local
+*.env
+
+# macOS
+.DS_Store

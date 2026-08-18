@@ -4,8 +4,8 @@
 export interface LocalizedName {
   en: string;
   ru: string;
-  et: string;
-  [key: string]: string;
+  et?: string;
+  [key: string]: string | undefined;
 }
 
 /**

@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
+
 	"smart-home/api"
 	"smart-home/db"
 	"smart-home/mqtt"
@@ -12,15 +14,12 @@ import (
 )
 
 func main() {
-	// Load environment variables from .env file if available
 	godotenv.Load()
 
-	// Initialize Relational (PostgreSQL) and NoSQL (MongoDB) connections
 	pgDB := db.InitPostgres(os.Getenv("POSTGRES_URL"))
 	mongoClient := db.InitMongo(os.Getenv("MONGO_URI"))
 	mongoColl := mongoClient.Database("smart_home").Collection("telemetry")
 
-	// Apply quick database migrations
 	_, migrationErr := pgDB.Exec(`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS target_temperature DOUBLE PRECISION DEFAULT 23.0;`)
 	if migrationErr != nil {
 		fmt.Println("⚠️ Migration warning/error:", migrationErr)
@@ -28,19 +27,17 @@ func main() {
 		fmt.Println("✅ PostgreSQL structure verified successfully (target_temperature column active)")
 	}
 
-	// Initialize MQTT client subscriber for live telemetry ingestion
 	_ = mqtt.InitMQTT(mongoColl)
 
-	// Initialize Gin HTTP router
 	r := gin.Default()
 
-	// Global CORS middleware
 	r.Use(api.CORSMiddleware())
 
 	// Public routes
 	r.POST("/login", api.Login(pgDB))
+	r.POST("/api/v1/telemetry", api.ReceiveTelemetry(mongoColl))
 
-	// Protected routes (JWT authentication required)
+	// Protected routes
 	protected := r.Group("/")
 	protected.Use(api.AuthMiddleware())
 	{
@@ -48,11 +45,13 @@ func main() {
 		protected.POST("/rooms/:id/target-temp", api.UpdateTargetTemperature(pgDB))
 	}
 
-	// Start server on designated port
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	r.Run(":" + port)
+
+	port = strings.TrimPrefix(port, ":")
+
+	r.Run("127.0.0.1:" + port)
 }

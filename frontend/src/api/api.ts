@@ -1,9 +1,26 @@
-import { RoomData, UpdateResponse } from "../types/telemetry.js";
+import { RoomData, UpdateResponse } from "../types/telemetry";
 
-const API_URL = "http://localhost:8080";
+const API_URL = "http://127.0.0.1:8080";
 
 interface LoginResponse {
   token: string;
+}
+
+/**
+ * Handles automatic session cleanup when an expired or invalid token is rejected by the server
+ */
+function handleUnauthorized(): void {
+  console.warn("⚠️ [Auth] Session expired or invalid (401). Clearing token...");
+  localStorage.removeItem("jwt_token");
+  localStorage.removeItem("token");
+  window.location.reload();
+}
+
+/**
+ * Formats the raw JWT string into a standard Bearer Authorization header value
+ */
+function getAuthHeader(token: string): string {
+  return token.startsWith("Bearer ") ? token : `Bearer ${token}`;
 }
 
 /**
@@ -19,7 +36,10 @@ export async function loginRequest(
     body: JSON.stringify({ username, password }),
   });
 
-  if (!response.ok) throw new Error("Неверный логин или пароль");
+  if (!response.ok) {
+    throw new Error("Invalid username or password");
+  }
+
   return (await response.json()) as LoginResponse;
 }
 
@@ -30,16 +50,17 @@ export async function fetchTelemetry(token: string): Promise<RoomData[]> {
   const response = await fetch(`${API_URL}/telemetry`, {
     method: "GET",
     headers: {
-      Authorization: token,
+      Authorization: getAuthHeader(token),
       "Content-Type": "application/json",
     },
   });
 
   if (response.status === 401) {
+    handleUnauthorized();
     throw new Error("Unauthorized");
   }
   if (!response.ok) {
-    throw new Error("Ошибка сервера");
+    throw new Error("Server error while fetching telemetry");
   }
 
   return (await response.json()) as RoomData[];
@@ -56,7 +77,7 @@ export async function updateTargetTemperatureRequest(
   const response = await fetch(`${API_URL}/rooms/${roomId}/target-temp`, {
     method: "POST",
     headers: {
-      Authorization: token,
+      Authorization: getAuthHeader(token),
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -65,6 +86,7 @@ export async function updateTargetTemperatureRequest(
   });
 
   if (response.status === 401) {
+    handleUnauthorized();
     throw new Error("Unauthorized");
   }
   if (!response.ok) {

@@ -3,6 +3,7 @@ package mqtt
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"time"
@@ -38,7 +39,7 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 	log.Printf("📡 [MQTT Received] Topic: %s | Device: %s | %s: %.2f %s",
 		msg.Topic(), payload.DeviceID, payload.SensorType, payload.Value, payload.Unit)
 
-	// Save incoming telemetry into MongoDB time-series collection
+	
 	if mongoCollection != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -69,7 +70,7 @@ var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err
 	log.Printf("⚠️ [MQTT Warning] Connection lost: %v", err)
 }
 
-// InitMQTT sets up client options and connects to the broker
+
 func InitMQTT(coll *mongo.Collection) mqtt.Client {
 	mongoCollection = coll
 
@@ -80,7 +81,19 @@ func InitMQTT(coll *mongo.Collection) mqtt.Client {
 
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(brokerURL)
-	opts.SetClientID("smart_home_go_engine")
+
+	
+	clientID := fmt.Sprintf("smart_home_go_engine_%d", time.Now().UnixNano())
+	opts.SetClientID(clientID)
+
+	
+	if user := os.Getenv("MQTT_USER"); user != "" {
+		opts.SetUsername(user)
+	}
+	if pass := os.Getenv("MQTT_PASSWORD"); pass != "" {
+		opts.SetPassword(pass)
+	}
+
 	opts.SetOnConnectHandler(connectHandler)
 	opts.SetConnectionLostHandler(connectLostHandler)
 	opts.SetKeepAlive(60 * time.Second)
