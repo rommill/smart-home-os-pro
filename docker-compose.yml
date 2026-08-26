@@ -1,11 +1,19 @@
+networks:
+  smart_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mongo_data:
+
 services:
-  # ---------------------------------------------------------------------------
-  # Relational Database (PostgreSQL)
-  # ---------------------------------------------------------------------------
+  # --- 1. Relational Database ---
   db_relational:
     image: postgres:16-alpine
     container_name: smart_postgres
-    restart: always
+    restart: unless-stopped
+    networks:
+      - smart_network
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: smart_password
@@ -13,83 +21,70 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d smart_home_db"]
-      interval: 5s
-      timeout: 5s
+      interval: 3s
+      timeout: 3s
       retries: 5
-      start_period: 10s
 
-  # ---------------------------------------------------------------------------
-  # Document / NoSQL Database (MongoDB)
-  # ---------------------------------------------------------------------------
+  # --- 2. NoSQL Database ---
   db_nosql:
-    image: mongo:7.0
+    image: mongo:7-jammy
     container_name: smart_mongo
-    restart: always
+    restart: unless-stopped
+    networks:
+      - smart_network
     ports:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  # ---------------------------------------------------------------------------
-  # MQTT Message Broker (Eclipse Mosquitto)
-  # ---------------------------------------------------------------------------
-  broker:
-    image: eclipse-mosquitto:2.0
-    container_name: smart_broker
-    ports:
-      - "1883:1883"
-      - "9001:9001"
-    volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
-    healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 1883 || exit 1"]
-      interval: 5s
+      interval: 3s
       timeout: 3s
       retries: 5
 
-  # ---------------------------------------------------------------------------
-  # Core Administrative Backend (Spring Boot 4.0 / Java 21)
-  # ---------------------------------------------------------------------------
-  backend_spring:
-    build:
-      context: ./backend-spring
-      dockerfile: Dockerfile
-    container_name: smart_spring
-    restart: always
+  # --- 3. MQTT Broker ---
+  broker:
+    image: eclipse-mosquitto:2.0
+    container_name: smart_mqtt
+    restart: unless-stopped
+    networks:
+      - smart_network
     ports:
-      - "8082:8082"
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db_relational:5432/smart_home_db
-      SPRING_DATASOURCE_USERNAME: admin
-      SPRING_DATASOURCE_PASSWORD: smart_password
-    depends_on:
-      db_relational:
-        condition: service_healthy
+      - "1883:1883"
+    entrypoint:
+      [
+        "sh",
+        "-c",
+        "echo 'listener 1883\nallow_anonymous true' > /tmp/mosquitto.conf && exec mosquitto -c /tmp/mosquitto.conf",
+      ]
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 1883 || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
 
-  # ---------------------------------------------------------------------------
-  # High-Throughput Telemetry Ingestion Engine (Go)
-  # ---------------------------------------------------------------------------
+  # --- 4. Go Backend Service ---
   backend_go:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: smart_go
-    restart: always
+    restart: unless-stopped
+    networks:
+      - smart_network
     ports:
       - "8080:8080"
     environment:
-      POSTGRES_URL: postgres://admin:smart_password@db_relational:5432/smart_home_db?sslmode=disable
-      MONGO_URI: mongodb://db_nosql:27017
-      MQTT_BROKER_URL: tcp://broker:1883
+      - TZ=Europe/Tallinn
+      - PORT=8080
+      - POSTGRES_URL=postgresql://admin:smart_password@db_relational:5432/smart_home_db?sslmode=disable
+      - MONGO_URI=mongodb://db_nosql:27017
+      - MQTT_BROKER=tcp://broker:1883
+      - GO_BACKEND_URL=http://backend_go:8080/api/v1/telemetry
+      - JWT_SECRET=super_secret_smart_home_jwt_key_2026
     depends_on:
       db_relational:
         condition: service_healthy
@@ -97,7 +92,3 @@ services:
         condition: service_healthy
       broker:
         condition: service_healthy
-
-volumes:
-  pg_data:
-  mongo_data:

@@ -17,63 +17,91 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-/**
- * GetTelemetry handles user-specific room data and couples it with MongoDB stream logs.
- */
+// GetTelemetry handles user-specific room data and couples it with MongoDB stream logs.
 func GetTelemetry(db *sql.DB, mongoColl *mongo.Collection) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, _ := c.Get("userID")
+		if db == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection is nil"})
+			return
+		}
 
-		tx, err := db.Begin()
+		
+		var userID interface{}
+		if id, exists := c.Get("user_id"); exists {
+			userID = id
+		} else if id, exists := c.Get("userID"); exists {
+			userID = id
+		} else if un, exists := c.Get("username"); exists {
+			userID = un
+		}
+
+		if userID == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: user context missing"})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+		defer cancel()
+
+		tx, err := db.BeginTx(ctx, nil)
 		if err != nil {
+			fmt.Println("❌ BEGIN TX ERROR:", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction start error"})
 			return
 		}
 		defer tx.Rollback()
 
-		_, err = tx.Exec("SELECT set_config('app.current_user_id', $1, true)", fmt.Sprintf("%v", userID))
+	
+		userIDStr := fmt.Sprintf("%v", userID)
+		_, err = tx.ExecContext(ctx, "SELECT set_config('app.current_user_id', $1, true)", userIDStr)
 		if err != nil {
+			fmt.Println("❌ RLS SET_CONFIG ERROR:", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "RLS context error"})
 			return
 		}
 
-		rows, err := tx.Query("SELECT id, name, target_temperature FROM rooms ORDER BY id ASC")
+		rows, err := tx.QueryContext(ctx, "SELECT id, name, target_temperature FROM rooms ORDER BY id ASC")
 		if err != nil {
 			fmt.Println("❌ POSTGRESQL QUERY ERROR:", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "DB error"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "DB query error"})
 			return
 		}
 		defer rows.Close()
 
-		var results []models.RoomData
+		results := make([]models.RoomData, 0)
 
 		for rows.Next() {
 			var id int
-			var nameBytes []byte
+			var rawName string
 			var targetTemp sql.NullFloat64
 
-			if err := rows.Scan(&id, &nameBytes, &targetTemp); err != nil {
+			if err := rows.Scan(&id, &rawName, &targetTemp); err != nil {
 				fmt.Println("❌ SCAN ERROR:", err)
 				continue
 			}
 
+			
 			nameMap := make(map[string]string)
-			if err := json.Unmarshal(nameBytes, &nameMap); err != nil {
-				nameMap = map[string]string{"en": string(nameBytes), "ru": string(nameBytes)}
+			if err := json.Unmarshal([]byte(rawName), &nameMap); err != nil {
+				nameMap = map[string]string{"en": rawName, "ru": rawName}
 			}
-
-			var lastEntry bson.M
-			opts := options.FindOne().SetSort(bson.M{"timestamp": -1})
-			
-			
-			err := mongoColl.FindOne(context.TODO(), bson.M{"device_id": fmt.Sprintf("%d", id)}, opts).Decode(&lastEntry)
 
 			temp := "N/A"
 			lastTime := time.Time{}
-			if err == nil {
-				temp = fmt.Sprintf("%v", lastEntry["value"])
-				if t, ok := lastEntry["timestamp"].(primitive.DateTime); ok {
-					lastTime = t.Time()
+
+			
+			if mongoColl != nil {
+				var lastEntry bson.M
+				opts := options.FindOne().SetSort(bson.M{"timestamp": -1})
+
+				err := mongoColl.FindOne(ctx, bson.M{"device_id": fmt.Sprintf("%d", id)}, opts).Decode(&lastEntry)
+				if err == nil {
+					if val, ok := lastEntry["value"]; ok {
+						temp = fmt.Sprintf("%v", val)
+					}
+					if t, ok := lastEntry["timestamp"].(primitive.DateTime); ok {
+						lastTime = t.Time()
+					}
 				}
 			}
 
@@ -92,6 +120,7 @@ func GetTelemetry(db *sql.DB, mongoColl *mongo.Collection) gin.HandlerFunc {
 		}
 
 		if err := tx.Commit(); err != nil {
+			fmt.Println("❌ COMMIT ERROR:", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit error"})
 			return
 		}
@@ -100,14 +129,29 @@ func GetTelemetry(db *sql.DB, mongoColl *mongo.Collection) gin.HandlerFunc {
 	}
 }
 
-/**
- * UpdateTargetTemperature safely updates room temperature parameters
- */
+// UpdateTargetTemperature safely updates room temperature parameters
 func UpdateTargetTemperature(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, _ := c.Get("userID")
-		roomIDStr := c.Param("id")
+		if db == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection is nil"})
+			return
+		}
 
+		var userID interface{}
+		if id, exists := c.Get("user_id"); exists {
+			userID = id
+		} else if id, exists := c.Get("userID"); exists {
+			userID = id
+		} else if un, exists := c.Get("username"); exists {
+			userID = un
+		}
+
+		if userID == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized context missing"})
+			return
+		}
+
+		roomIDStr := c.Param("id")
 		var roomID int
 		if _, err := fmt.Sscanf(roomIDStr, "%d", &roomID); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid room ID format"})
@@ -123,21 +167,26 @@ func UpdateTargetTemperature(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		tx, err := db.Begin()
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+		defer cancel()
+
+		tx, err := db.BeginTx(ctx, nil)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction start error"})
 			return
 		}
 		defer tx.Rollback()
 
-		_, err = tx.Exec("SELECT set_config('app.current_user_id', $1, true)", fmt.Sprintf("%v", userID))
+		userIDStr := fmt.Sprintf("%v", userID)
+		_, err = tx.ExecContext(ctx, "SELECT set_config('app.current_user_id', $1, true)", userIDStr)
 		if err != nil {
+			fmt.Println("❌ RLS SET_CONFIG ERROR:", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "RLS context error"})
 			return
 		}
 
 		query := `UPDATE rooms SET target_temperature = $1 WHERE id = $2`
-		result, err := tx.Exec(query, input.TargetTemperature, roomID)
+		result, err := tx.ExecContext(ctx, query, input.TargetTemperature, roomID)
 		if err != nil {
 			fmt.Println("❌ UPDATE EXECUTION ERROR:", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update database state"})
@@ -163,9 +212,7 @@ func UpdateTargetTemperature(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-/**
- * ReceiveTelemetry принимает данные от BLE
- */
+// ReceiveTelemetry receives telemetry payload from BLE bridge
 func ReceiveTelemetry(mongoColl *mongo.Collection) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var input models.BLETelemetryInput
@@ -180,6 +227,9 @@ func ReceiveTelemetry(mongoColl *mongo.Collection) gin.HandlerFunc {
 			input.DeviceID, input.Temperature, input.Humidity, input.Battery)
 
 		if mongoColl != nil {
+			ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+			defer cancel()
+
 			doc := bson.M{
 				"device_id":   input.DeviceID,
 				"value":       input.Temperature,
@@ -189,7 +239,7 @@ func ReceiveTelemetry(mongoColl *mongo.Collection) gin.HandlerFunc {
 				"rssi":        input.RSSI,
 				"timestamp":   primitive.NewDateTimeFromTime(time.Unix(input.Timestamp, 0)),
 			}
-			_, _ = mongoColl.InsertOne(context.TODO(), doc)
+			_, _ = mongoColl.InsertOne(ctx, doc)
 		}
 
 		c.JSON(http.StatusOK, gin.H{"status": "success"})

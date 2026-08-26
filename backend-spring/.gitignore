@@ -68,3 +68,7 @@ smart-home-os-pro
 
 # macOS
 .DS_Store
+
+# Cookies & Auth sessions
+cookies.txt
+*.cookies

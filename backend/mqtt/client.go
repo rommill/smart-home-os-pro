@@ -39,7 +39,6 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 	log.Printf("📡 [MQTT Received] Topic: %s | Device: %s | %s: %.2f %s",
 		msg.Topic(), payload.DeviceID, payload.SensorType, payload.Value, payload.Unit)
 
-	
 	if mongoCollection != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -70,23 +69,24 @@ var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err
 	log.Printf("⚠️ [MQTT Warning] Connection lost: %v", err)
 }
 
-
 func InitMQTT(coll *mongo.Collection) mqtt.Client {
 	mongoCollection = coll
 
-	brokerURL := os.Getenv("MQTT_BROKER_URL")
+	
+	brokerURL := os.Getenv("MQTT_BROKER")
 	if brokerURL == "" {
-		brokerURL = "tcp://localhost:1883"
+		brokerURL = os.Getenv("MQTT_BROKER_URL")
+	}
+	if brokerURL == "" {
+		brokerURL = "tcp://broker:1883"
 	}
 
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(brokerURL)
 
-	
 	clientID := fmt.Sprintf("smart_home_go_engine_%d", time.Now().UnixNano())
 	opts.SetClientID(clientID)
 
-	
 	if user := os.Getenv("MQTT_USER"); user != "" {
 		opts.SetUsername(user)
 	}
