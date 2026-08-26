@@ -1,11 +1,7 @@
 import "./index.css";
-import {
-  loginRequest,
-  fetchTelemetry,
-  updateTargetTemperatureRequest,
-} from "./api/api";
-import { getToken, saveToken, removeToken, isAuthorized } from "./auth/auth";
-import { updateStatus, renderRooms, toggleAuthView } from "./render/render";
+import { loginRequest } from "./api/api";
+import { saveToken, removeToken, isAuthorized } from "./auth/auth";
+import { updateStatus, toggleAuthView } from "./render/render";
 import {
   getCurrentLang,
   setLang,
@@ -13,96 +9,19 @@ import {
   registerLangChangeListener,
 } from "./i18n/i18n";
 import { initTheme, toggleTheme } from "./theme/theme";
-import { RoomData } from "./types/telemetry";
+import {
+  startPolling,
+  stopPolling,
+  checkAndRefreshTelemetry,
+  syncTargetTemperature,
+} from "./orchestrator/telemetryOrchestrator";
 
-// Enforce strict typing for background polling routines
-let telemetryInterval: number | null = null;
-
-/**
- * Handles target temperature synchronization with the Go/PostgreSQL backend layer.
- */
-async function syncTargetTemperature(
-  roomId: number,
-  value: string,
-): Promise<void> {
-  const token: string | null = getToken();
-  if (!token) {
-    updateStatus("statusNeedAuth", "warning");
-    return;
-  }
-
-  try {
-    const numericValue: number = parseFloat(value);
-    await updateTargetTemperatureRequest(roomId, numericValue, token);
-    console.log(
-      `[Climate Orchestrator] Room ${roomId} mutated successfully to ${numericValue}°C`,
-    );
-  } catch (err: any) {
-    console.error(
-      `[Climate Orchestrator] Microservice execution error on room ${roomId}:`,
-      err,
-    );
-    if (err.message === "Unauthorized") {
-      updateStatus("statusAuthErr", "error");
-      removeToken();
-      toggleAuthView(true);
-      stopPolling();
-    }
-  }
-}
-
-/**
- * Validates session boundaries and updates interface component states.
- */
-async function checkAndRefreshTelemetry(): Promise<void> {
-  const token: string | null = getToken();
-  if (!token) {
-    updateStatus("statusNeedAuth", "warning");
-    toggleAuthView(true);
-    stopPolling();
-    return;
-  }
-
-  try {
-    const data: RoomData[] = await fetchTelemetry(token);
-    renderRooms(data);
-    updateStatus("statusOnline", "success");
-    toggleAuthView(false);
-  } catch (err: any) {
-    console.error("[Runtime Telemetry] Extraction pipeline error:", err);
-    if (err.message === "Unauthorized") {
-      updateStatus("statusAuthErr", "error");
-      removeToken();
-      toggleAuthView(true);
-      stopPolling();
-    } else {
-      updateStatus("statusConnErr", "error");
-    }
-  }
-}
-
-function startPolling(): void {
-  if (!telemetryInterval) {
-    telemetryInterval = window.setInterval(checkAndRefreshTelemetry, 3000);
-  }
-}
-
-function stopPolling(): void {
-  if (telemetryInterval) {
-    clearInterval(telemetryInterval);
-    telemetryInterval = null;
-  }
-}
-
-// Subscribe runtime event loop handlers to internationalization state bounds
+// Subscribe internationalization change listener
 registerLangChangeListener(() => {
   translatePage();
   checkAndRefreshTelemetry();
 });
 
-/**
- * Single Page Application execution context initialization.
- */
 document.addEventListener("DOMContentLoaded", () => {
   const loginForm = document.getElementById(
     "login-form",
@@ -136,7 +55,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   translatePage();
 
-  // Delegation pattern for interactive inputs to secure cleaner state rendering
+  // Delegation pattern for climate range sliders
   if (roomsGrid) {
     roomsGrid.addEventListener("change", (e: Event) => {
       const target = e.target as HTMLInputElement;
@@ -187,6 +106,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // App entry state validation
   if (isAuthorized()) {
     toggleAuthView(false);
     checkAndRefreshTelemetry();

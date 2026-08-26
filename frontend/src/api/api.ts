@@ -7,24 +7,14 @@ interface LoginResponse {
 }
 
 /**
- * Handles automatic session cleanup when an expired or invalid token is rejected by the server
- */
-function handleUnauthorized(): void {
-  console.warn("⚠️ [Auth] Session expired or invalid (401). Clearing token...");
-  localStorage.removeItem("jwt_token");
-  localStorage.removeItem("token");
-  window.location.reload();
-}
-
-/**
- * Formats the raw JWT string into a standard Bearer Authorization header value
+ * Formats the raw JWT string into a standard Bearer Authorization header value.
  */
 function getAuthHeader(token: string): string {
   return token.startsWith("Bearer ") ? token : `Bearer ${token}`;
 }
 
 /**
- * Sends an authentication request to the Go identity provider
+ * Sends an authentication request to the backend identity provider.
  */
 export async function loginRequest(
   username: string,
@@ -44,7 +34,7 @@ export async function loginRequest(
 }
 
 /**
- * Fetches the latest sensor telemetry array from the backend
+ * Fetches the latest sensor telemetry array from the backend.
  */
 export async function fetchTelemetry(token: string): Promise<RoomData[]> {
   const response = await fetch(`${API_URL}/telemetry`, {
@@ -56,7 +46,6 @@ export async function fetchTelemetry(token: string): Promise<RoomData[]> {
   });
 
   if (response.status === 401) {
-    handleUnauthorized();
     throw new Error("Unauthorized");
   }
   if (!response.ok) {
@@ -67,7 +56,7 @@ export async function fetchTelemetry(token: string): Promise<RoomData[]> {
 }
 
 /**
- * Syncs the updated target climate temperature back to the PostgreSQL instance
+ * Syncs the updated target climate temperature back to the backend.
  */
 export async function updateTargetTemperatureRequest(
   roomId: number,
@@ -86,7 +75,6 @@ export async function updateTargetTemperatureRequest(
   });
 
   if (response.status === 401) {
-    handleUnauthorized();
     throw new Error("Unauthorized");
   }
   if (!response.ok) {

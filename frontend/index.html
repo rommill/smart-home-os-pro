@@ -59,7 +59,7 @@
 
       <section
         id="login-section"
-        class="hidden max-w-md mx-auto my-20 bg-slate-800 p-8 rounded-2xl shadow-2xl border border-slate-700"
+        class="max-w-md mx-auto my-20 bg-slate-800 p-8 rounded-2xl shadow-2xl border border-slate-700"
       >
         <h2
           class="text-2xl font-bold text-center mb-6 text-slate-100"
@@ -70,26 +70,34 @@
         <form id="login-form" class="space-y-4">
           <div>
             <label
+              for="username"
               class="block text-sm font-medium text-slate-400 mb-1"
               data-i18n="usernameLabel"
-              >Имя пользователя</label
             >
+              Имя пользователя
+            </label>
             <input
               type="text"
               id="username"
+              name="username"
+              autocomplete="username"
               required
               class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-all"
             />
           </div>
           <div>
             <label
+              for="password"
               class="block text-sm font-medium text-slate-400 mb-1"
               data-i18n="passwordLabel"
-              >Пароль</label
             >
+              Пароль
+            </label>
             <input
               type="password"
               id="password"
+              name="password"
+              autocomplete="current-password"
               required
               class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-all"
             />
@@ -108,11 +116,7 @@
         <div
           id="rooms-grid"
           class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-        >
-          <div
-            class="animate-pulse bg-slate-800 h-40 rounded-2xl border border-slate-700"
-          ></div>
-        </div>
+        ></div>
       </main>
     </div>
 
