@@ -53,6 +53,7 @@ jobs:
         with:
           version: v1.60.1
           working-directory: backend
+          skip-cache: true
 
       - name: Run govulncheck (Vulnerability Scanner)
         run: |
