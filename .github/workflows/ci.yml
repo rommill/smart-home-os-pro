@@ -29,9 +29,9 @@ jobs:
         run: |
           ./backend-spring/gradlew -p backend-spring test
 
-  # 2. Go Telemetry Engine Testing
+  # 2. Go Telemetry Engine Testing, Linting & Security Scan
   test-go:
-    name: Build & Test Go Telemetry Engine
+    name: Test & Scan Go Telemetry Engine
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -48,6 +48,18 @@ jobs:
           cd backend
           go test -v ./...
 
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: v1.55.2
+          working-directory: backend
+
+      - name: Run govulncheck (Vulnerability Scanner)
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          cd backend
+          govulncheck ./...
+
   # 3. Validate Multi-Container Docker Build
   docker-build:
     name: Validate Docker Compose Stack
@@ -56,6 +68,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Create mock .env for CI Docker Build
+        run: |
+          cp .env.example .env || echo "POSTGRES_USER=postgres\nPOSTGRES_PASSWORD=postgres\nPOSTGRES_DB=smart_home\nJWT_SECRET=ci_test_secret" > .env
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

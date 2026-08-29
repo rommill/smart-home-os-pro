@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -29,7 +30,7 @@ func GenerateJWT(userID interface{}, username, role string) (string, error) {
 	}
 
 	claims := jwt.MapClaims{
-		"user_id":  userID,
+		"user_id":  fmt.Sprintf("%v", userID),
 		"username": username,
 		"role":     role,
 		"exp":      time.Now().Add(24 * time.Hour).Unix(),
@@ -43,13 +44,18 @@ func GenerateJWT(userID interface{}, username, role string) (string, error) {
 // CORSMiddleware configures cross-origin resource sharing headers.
 func CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		allowedOrigin := os.Getenv("ALLOWED_ORIGIN")
+		if allowedOrigin == "" {
+			allowedOrigin = "http://localhost:3000"
+		}
+
+		c.Writer.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
 
 		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
+			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
 
@@ -96,21 +102,64 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		if claims, ok := token.Claims.(jwt.MapClaims); ok {
-			// Вкладываем user_id и под ключом "userID", и под ключом "user_id"
+			var userIDStr string
 			if val, exists := claims["user_id"]; exists {
-				c.Set("userID", val)
-				c.Set("user_id", val)
+				userIDStr = fmt.Sprintf("%v", val)
 			}
+
+			c.Set("userID", userIDStr)
+			c.Set("user_id", userIDStr)
+
 			if val, exists := claims["username"]; exists {
-				c.Set("username", val)
-			} else if val, exists := claims["user_id"]; exists {
-				// Фоллбэк: если username нет, используем user_id
 				c.Set("username", fmt.Sprintf("%v", val))
+			} else {
+				c.Set("username", userIDStr)
 			}
+
 			if val, exists := claims["role"]; exists {
-				c.Set("role", val)
+				c.Set("role", fmt.Sprintf("%v", val))
 			}
 		}
+
+		c.Next()
+	}
+}
+
+// RateLimiter struct to track request attempts per IP.
+type clientLimiter struct {
+	lastSeen time.Time
+	count    int
+}
+
+var (
+	clients = make(map[string]*clientLimiter)
+	mu      sync.Mutex
+)
+
+// LoginRateLimiter limits repeated auth requests to prevent brute-force attacks.
+func LoginRateLimiter(maxRequests int, window time.Duration) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		clientIP := c.ClientIP()
+
+		mu.Lock()
+		limiter, exists := clients[clientIP]
+		if !exists || time.Since(limiter.lastSeen) > window {
+			clients[clientIP] = &clientLimiter{lastSeen: time.Now(), count: 1}
+			mu.Unlock()
+			c.Next()
+			return
+		}
+
+		if limiter.count >= maxRequests {
+			mu.Unlock()
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many login attempts. Please try again later."})
+			c.Abort()
+			return
+		}
+
+		limiter.count++
+		limiter.lastSeen = time.Now()
+		mu.Unlock()
 
 		c.Next()
 	}

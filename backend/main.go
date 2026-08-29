@@ -35,36 +35,36 @@ func main() {
 	}
 
 	pgDB := db.InitPostgres(postgresURL)
-	defer pgDB.Close()
+    defer pgDB.Close()
 
-	mongoClient := db.InitMongo(mongoURI)
-	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := mongoClient.Disconnect(ctx); err != nil {
-			log.Printf("⚠️ Error disconnecting MongoDB: %v", err)
-		}
-	}()
+    mongoClient := db.InitMongo(mongoURI)
+    defer func() {
+        ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+        defer cancel()
+        if err := mongoClient.Disconnect(ctx); err != nil {
+            log.Printf("⚠️ Error disconnecting MongoDB: %v", err)
+        }
+    }()
 
-	mongoColl := mongoClient.Database("smart_home").Collection("telemetry")
+    mongoColl := mongoClient.Database("smart_home").Collection("telemetry")
 
-	// Передаем mongoColl в инициализацию MQTT
-	_ = mqtt.InitMQTT(mongoColl)
+    
+    _ = mqtt.InitMQTT(mongoColl, pgDB)
 
 	r := gin.Default()
-	r.Use(api.CORSMiddleware())
+    r.Use(api.CORSMiddleware())
 
-	// Public routes
-	r.POST("/login", api.Login(pgDB))
-	r.POST("/api/v1/telemetry", api.ReceiveTelemetry(mongoColl))
+    // Public routes
+    r.POST("/login", api.LoginRateLimiter(5, 1*time.Minute), api.Login(pgDB))
+    r.POST("/api/v1/telemetry", api.ReceiveTelemetry(mongoColl))
 
-	// Protected routes
-	protected := r.Group("/")
-	protected.Use(api.AuthMiddleware())
-	{
-		protected.GET("/telemetry", api.GetTelemetry(pgDB, mongoColl))
-		protected.POST("/rooms/:id/target-temp", api.UpdateTargetTemperature(pgDB))
-	}
+    // Protected routes
+    protected := r.Group("/")
+    protected.Use(api.AuthMiddleware())
+    {
+        protected.GET("/telemetry", api.GetTelemetry(pgDB, mongoColl))
+        protected.POST("/rooms/:id/target-temp", api.UpdateTargetTemperature(pgDB))
+    }
 
 	port := os.Getenv("PORT")
 	if port == "" {

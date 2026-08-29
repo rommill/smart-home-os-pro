@@ -2,10 +2,12 @@ package mqtt
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -22,7 +24,10 @@ type TelemetryPayload struct {
 	Metadata   map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
 }
 
-var mongoCollection *mongo.Collection
+var (
+	mongoCollection *mongo.Collection
+	postgresDB      *sql.DB
+)
 
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
 	var payload TelemetryPayload
@@ -39,6 +44,7 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 	log.Printf("📡 [MQTT Received] Topic: %s | Device: %s | %s: %.2f %s",
 		msg.Topic(), payload.DeviceID, payload.SensorType, payload.Value, payload.Unit)
 
+	// 1. Сохранение сырой телеметрии в MongoDB (история)
 	if mongoCollection != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -48,6 +54,32 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 			log.Printf("❌ [MongoDB Error] Failed to insert telemetry: %v", err)
 		} else {
 			log.Printf("💾 [MongoDB] Ingested telemetry for device: %s", payload.DeviceID)
+		}
+	}
+
+	// 2. Обновление текущего состояния комнаты в PostgreSQL (для фронтенда)
+	if postgresDB != nil && payload.SensorType == "temperature" {
+		// Извлекаем имя комнаты из топика "home/Living Room/telemetry"
+		parts := strings.Split(msg.Topic(), "/")
+		if len(parts) >= 2 {
+			roomName := parts[1] // "Living Room" или "Bedroom"
+			tempStr := fmt.Sprintf("%.1f", payload.Value)
+
+			// Ищем комнату по имени (в JSON-поле name->>'en' или name->>'ru' или полю name)
+			query := `
+				UPDATE rooms 
+				SET temperature = $1, last_update = NOW() 
+				WHERE name->>'en' = $2 OR name->>'ru' = $2
+			`
+			res, err := postgresDB.Exec(query, tempStr, roomName)
+			if err != nil {
+				log.Printf("❌ [Postgres Error] Failed to update room %s: %v", roomName, err)
+			} else {
+				rows, _ := res.RowsAffected()
+				if rows > 0 {
+					log.Printf("🔄 [Postgres] Updated %s temperature to %s°C", roomName, tempStr)
+				}
+			}
 		}
 	}
 }
@@ -69,10 +101,11 @@ var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err
 	log.Printf("⚠️ [MQTT Warning] Connection lost: %v", err)
 }
 
-func InitMQTT(coll *mongo.Collection) mqtt.Client {
+// InitMQTT принимает параметры для Mongo и Postgres
+func InitMQTT(coll *mongo.Collection, db *sql.DB) mqtt.Client {
 	mongoCollection = coll
+	postgresDB = db
 
-	
 	brokerURL := os.Getenv("MQTT_BROKER")
 	if brokerURL == "" {
 		brokerURL = os.Getenv("MQTT_BROKER_URL")
