@@ -40,52 +40,46 @@ The platform is explicitly designed with a CQRS-inspired hybrid architecture to 
                                               |    Python Climate Emulator     |    |
                                               +--------------------------------+    |
 
-Architectural Decisions (Why this stack?)
-Spring Boot (backend-spring): Serves as the core administrative and identity provider. It handles enterprise-level security, JWT parsing, data validation, and core relational business logic.
 
-Go (backend): Functions as an ultra-lightweight, reactive telemetry ingestion engine. Handling high-frequency MQTT message streams from hundreds of IoT sensors via a heavy framework is resource-inefficient; Go provides near-zero memory footprint and optimal throughput.
+## Architectural Decisions (Why this stack?)
 
-MQTT (Mosquitto): Utilized as the industrial standard for low-overhead, pub/sub communication, perfectly mimicking real hardware network limitations.
+* **Spring Boot (backend-spring):** Serves as the core administrative and identity provider. It handles enterprise-level security, JWT parsing, data validation, and core relational business logic.
+* **Go (backend):** Functions as an ultra-lightweight, reactive telemetry ingestion engine. Handling high-frequency MQTT message streams from hundreds of IoT sensors via a heavy framework is resource-inefficient; Go provides near-zero memory footprint and optimal throughput.
+* **MQTT (Mosquitto):** Utilized as the industrial standard for low-overhead, pub/sub communication, perfectly mimicking real hardware network limitations.
 
-Key Features
-Strict Device Isolation (Multi-Tenancy): Devices are securely mapped to verified user identities extracted directly from valid JWT claims. One user can never access or modify another user's IoT fleet.
+## Key Features
 
-Dual-Protocol Synchronicity: Synchronous operations (Authentication, Asset management) run over REST API, while asynchronous data streams (Telemetry) are piped via MQTT.
+* **Strict Device Isolation (Multi-Tenancy):** Devices are securely mapped to verified user identities extracted directly from valid JWT claims. One user can never access or modify another user's IoT fleet.
+* **Dual-Protocol Synchronicity:** Synchronous operations (Authentication, Asset management) run over REST API, while asynchronous data streams (Telemetry) are piped via MQTT.
+* **Automated Sensor Simulation:** Includes a native Python emulator that mimics real-world climate shifts and broadcasts state-packets.
+* **Internationalization (i18n):** Production-ready UI localized with multi-language support from the ground up.
 
-Automated Sensor Simulation: Includes a native Python emulator that mimics real-world climate shifts and broadcasts state-packets.
+## Technology Stack
 
-Internationalization (i18n): Production-ready UI localized with multi-language support from the ground up.
+* **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, i18next
+* **Administrative Backend:** Java 21, Spring Boot 4.0, Spring Security (Stateless JWT), Hibernate/JPA
+* **Ingestion Backend:** Go (Golang), Eclipse Paho MQTT
+* **Infrastructure & Messaging:** Docker, Docker Compose, Eclipse Mosquitto MQTT Broker
+* **Databases:** PostgreSQL (Production-grade relational state), Redis, SQLite
 
-Technology Stack
-Frontend: React 18, TypeScript, Vite, Tailwind CSS, i18next
+## Getting Started
 
-Administrative Backend: Java 21, Spring Boot 4.0, Spring Security (Stateless JWT), Hibernate/JPA
+### Prerequisites
 
-Ingestion Backend: Go (Golang), Eclipse Paho MQTT
+* Docker & Docker Compose installed
+* Java 21 & Go SDK (Optional, for local bare-metal testing)
 
-Infrastructure & Messaging: Docker, Docker Compose, Eclipse Mosquitto MQTT Broker
+### Installation & Launch
 
-Databases: PostgreSQL (Production-grade relational state), Redis, SQLite
-
-Getting Started
-Prerequisites
-Docker & Docker Compose installed
-
-Java 21 & Go SDK (Optional, for local bare-metal testing)
-
-Installation & Launch
 Clone the repository:
-```
-git clone https://github.com/rommill/smart-home-os-pro.git
-cd smart-home-os-pro 
-```
+```bash
+git clone [https://github.com/rommill/smart-home-os-pro.git](https://github.com/rommill/smart-home-os-pro.git)
+cd smart-home-os-pro
 
 Spin up the entire containerized infrastructure (Database, Broker, Backends, Emulator):
 
-```
+Bash
 docker compose up --build
-```
-
 API & Documentation
 Once the services are active, the fully interactive OpenAPI / Swagger UI configuration is automatically exposed:
 
@@ -94,7 +88,7 @@ URL: http://localhost:8082/swagger-ui/index.html
 Target Integration Example: Authenticating Requests
 To execute secure requests (POST /api/devices), authenticate first via the auth endpoint to receive your Bearer Token:
 
-```
+HTTP
 POST /api/auth/login
 Content-Type: application/json
 
@@ -102,13 +96,12 @@ Content-Type: application/json
   "username": "roman",
   "password": "your_secure_password"
 }
-```
 Response:
-```
+
+JSON
 {
   "token": "eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJyb21hbi..."
 }
-```
 Pass this token inside Swagger UI via the top-right Authorize lock button to clear the security filter container.
 
 Testing
@@ -116,17 +109,14 @@ Both backend segments include comprehensive suites covering validation rules, bu
 
 Execute Spring Boot Unit/Integration Tests:
 
-```
+Bash
 cd backend-spring
 ./gradlew test
-```
 Execute Go Telemetry Tests:
 
-```
+Bash
 cd backend
 go test ./...
-```
-
 Roadmap & Production Hardening
 [ ] Implement Refresh Token mechanics to complement short-lived access JWTs.
 
@@ -135,4 +125,3 @@ Roadmap & Production Hardening
 [x] Implement a full CI/CD Pipeline using GitHub Actions for multi-architecture Docker builds.
 
 [ ] Introduce horizontal scaling policies and a resilient persistent storage engine cluster.
-
