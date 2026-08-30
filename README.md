@@ -39,6 +39,7 @@ The platform is explicitly designed with a CQRS-inspired hybrid architecture to 
                                               +----------------------+---------+    |
                                               |    Python Climate Emulator     |    |
                                               +--------------------------------+    |
+
 Architectural Decisions (Why this stack?)
 Spring Boot (backend-spring): Serves as the core administrative and identity provider. It handles enterprise-level security, JWT parsing, data validation, and core relational business logic.
 
@@ -74,14 +75,17 @@ Java 21 & Go SDK (Optional, for local bare-metal testing)
 
 Installation & Launch
 Clone the repository:
+```
+git clone https://github.com/rommill/smart-home-os-pro.git
+cd smart-home-os-pro 
+```
 
-Bash
-git clone [https://github.com/rommill/smart-home-os-pro.git](https://github.com/rommill/smart-home-os-pro.git)
-cd smart-home-os-pro
 Spin up the entire containerized infrastructure (Database, Broker, Backends, Emulator):
 
-Bash
+```
 docker compose up --build
+```
+
 API & Documentation
 Once the services are active, the fully interactive OpenAPI / Swagger UI configuration is automatically exposed:
 
@@ -90,7 +94,7 @@ URL: http://localhost:8082/swagger-ui/index.html
 Target Integration Example: Authenticating Requests
 To execute secure requests (POST /api/devices), authenticate first via the auth endpoint to receive your Bearer Token:
 
-HTTP
+```
 POST /api/auth/login
 Content-Type: application/json
 
@@ -98,12 +102,13 @@ Content-Type: application/json
   "username": "roman",
   "password": "your_secure_password"
 }
+```
 Response:
-
-JSON
+```
 {
   "token": "eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJyb21hbi..."
 }
+```
 Pass this token inside Swagger UI via the top-right Authorize lock button to clear the security filter container.
 
 Testing
@@ -111,14 +116,17 @@ Both backend segments include comprehensive suites covering validation rules, bu
 
 Execute Spring Boot Unit/Integration Tests:
 
-Bash
+```
 cd backend-spring
 ./gradlew test
+```
 Execute Go Telemetry Tests:
 
-Bash
+```
 cd backend
 go test ./...
+```
+
 Roadmap & Production Hardening
 [ ] Implement Refresh Token mechanics to complement short-lived access JWTs.
 
@@ -127,3 +135,4 @@ Roadmap & Production Hardening
 [x] Implement a full CI/CD Pipeline using GitHub Actions for multi-architecture Docker builds.
 
 [ ] Introduce horizontal scaling policies and a resilient persistent storage engine cluster.
+
