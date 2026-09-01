@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -17,25 +18,31 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// GetTelemetry handles user-specific room data and couples it with MongoDB stream logs.
+// helper function to resolve user identification from request context
+func getUserIDFromContext(c *gin.Context) (interface{}, bool) {
+	if id, exists := c.Get("user_id"); exists {
+		return id, true
+	}
+	if id, exists := c.Get("userID"); exists {
+		return id, true
+	}
+	if un, exists := c.Get("username"); exists {
+		return un, true
+	}
+	return nil, false
+}
+
+// GetTelemetry handles user-specific room data and couples it with MongoDB telemetry streams.
 func GetTelemetry(db *sql.DB, mongoColl *mongo.Collection) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if db == nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection is nil"})
+			log.Println("❌ [TELEMETRY] Database connection is nil")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 			return
 		}
 
-		
-		var userID interface{}
-		if id, exists := c.Get("user_id"); exists {
-			userID = id
-		} else if id, exists := c.Get("userID"); exists {
-			userID = id
-		} else if un, exists := c.Get("username"); exists {
-			userID = un
-		}
-
-		if userID == nil {
+		userID, exists := getUserIDFromContext(c)
+		if !exists || userID == nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: user context missing"})
 			return
 		}
@@ -45,25 +52,23 @@ func GetTelemetry(db *sql.DB, mongoColl *mongo.Collection) gin.HandlerFunc {
 
 		tx, err := db.BeginTx(ctx, nil)
 		if err != nil {
-			fmt.Println("❌ BEGIN TX ERROR:", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction start error"})
+			log.Printf("❌ [TELEMETRY TX ERROR] BeginTx failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize transaction"})
 			return
 		}
 		defer tx.Rollback()
 
-	
 		userIDStr := fmt.Sprintf("%v", userID)
-		_, err = tx.ExecContext(ctx, "SELECT set_config('app.current_user_id', $1, true)", userIDStr)
-		if err != nil {
-			fmt.Println("❌ RLS SET_CONFIG ERROR:", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "RLS context error"})
+		if _, err := tx.ExecContext(ctx, "SELECT set_config('app.current_user_id', $1, true)", userIDStr); err != nil {
+			log.Printf("❌ [TELEMETRY RLS ERROR] Failed to set app.current_user_id: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to configure session context"})
 			return
 		}
 
 		rows, err := tx.QueryContext(ctx, "SELECT id, name, target_temperature FROM rooms ORDER BY id ASC")
 		if err != nil {
-			fmt.Println("❌ POSTGRESQL QUERY ERROR:", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "DB query error"})
+			log.Printf("❌ [TELEMETRY DB ERROR] Query failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch room records"})
 			return
 		}
 		defer rows.Close()
@@ -76,11 +81,10 @@ func GetTelemetry(db *sql.DB, mongoColl *mongo.Collection) gin.HandlerFunc {
 			var targetTemp sql.NullFloat64
 
 			if err := rows.Scan(&id, &rawName, &targetTemp); err != nil {
-				fmt.Println("❌ SCAN ERROR:", err)
+				log.Printf("⚠️ [TELEMETRY SCAN ERROR] Row scan failed: %v", err)
 				continue
 			}
 
-			
 			nameMap := make(map[string]string)
 			if err := json.Unmarshal([]byte(rawName), &nameMap); err != nil {
 				nameMap = map[string]string{"en": rawName, "ru": rawName}
@@ -89,7 +93,6 @@ func GetTelemetry(db *sql.DB, mongoColl *mongo.Collection) gin.HandlerFunc {
 			temp := "N/A"
 			lastTime := time.Time{}
 
-			
 			if mongoColl != nil {
 				var lastEntry bson.M
 				opts := options.FindOne().SetSort(bson.M{"timestamp": -1})
@@ -119,9 +122,15 @@ func GetTelemetry(db *sql.DB, mongoColl *mongo.Collection) gin.HandlerFunc {
 			})
 		}
 
+		if err := rows.Err(); err != nil {
+			log.Printf("❌ [TELEMETRY ROWS ERROR] Iteration error: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error processing query results"})
+			return
+		}
+
 		if err := tx.Commit(); err != nil {
-			fmt.Println("❌ COMMIT ERROR:", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit error"})
+			log.Printf("❌ [TELEMETRY COMMIT ERROR] Transaction commit failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to finalize transaction"})
 			return
 		}
 
@@ -129,25 +138,18 @@ func GetTelemetry(db *sql.DB, mongoColl *mongo.Collection) gin.HandlerFunc {
 	}
 }
 
-// UpdateTargetTemperature safely updates room temperature parameters
+// UpdateTargetTemperature safely updates room target temperature parameters with RLS validation.
 func UpdateTargetTemperature(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if db == nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection is nil"})
+			log.Println("❌ [ROOM UPDATE] Database connection is nil")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 			return
 		}
 
-		var userID interface{}
-		if id, exists := c.Get("user_id"); exists {
-			userID = id
-		} else if id, exists := c.Get("userID"); exists {
-			userID = id
-		} else if un, exists := c.Get("username"); exists {
-			userID = un
-		}
-
-		if userID == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized context missing"})
+		userID, exists := getUserIDFromContext(c)
+		if !exists || userID == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: user context missing"})
 			return
 		}
 
@@ -163,7 +165,7 @@ func UpdateTargetTemperature(db *sql.DB) gin.HandlerFunc {
 		}
 
 		if err := c.ShouldBindJSON(&input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload parameters"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload parameters"})
 			return
 		}
 
@@ -172,35 +174,36 @@ func UpdateTargetTemperature(db *sql.DB) gin.HandlerFunc {
 
 		tx, err := db.BeginTx(ctx, nil)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction start error"})
+			log.Printf("❌ [ROOM UPDATE TX ERROR] BeginTx failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize transaction"})
 			return
 		}
 		defer tx.Rollback()
 
 		userIDStr := fmt.Sprintf("%v", userID)
-		_, err = tx.ExecContext(ctx, "SELECT set_config('app.current_user_id', $1, true)", userIDStr)
-		if err != nil {
-			fmt.Println("❌ RLS SET_CONFIG ERROR:", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "RLS context error"})
+		if _, err := tx.ExecContext(ctx, "SELECT set_config('app.current_user_id', $1, true)", userIDStr); err != nil {
+			log.Printf("❌ [ROOM UPDATE RLS ERROR] Failed to set app.current_user_id: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to configure session context"})
 			return
 		}
 
 		query := `UPDATE rooms SET target_temperature = $1 WHERE id = $2`
 		result, err := tx.ExecContext(ctx, query, input.TargetTemperature, roomID)
 		if err != nil {
-			fmt.Println("❌ UPDATE EXECUTION ERROR:", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update database state"})
+			log.Printf("❌ [ROOM UPDATE DB ERROR] Query failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update room parameters"})
 			return
 		}
 
 		rowsAffected, err := result.RowsAffected()
 		if err != nil || rowsAffected == 0 {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Target room resource not found or unauthorized"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Room not found or modification unauthorized"})
 			return
 		}
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit error"})
+			log.Printf("❌ [ROOM UPDATE COMMIT ERROR] Transaction commit failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to finalize transaction"})
 			return
 		}
 
@@ -212,18 +215,18 @@ func UpdateTargetTemperature(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-// ReceiveTelemetry receives telemetry payload from BLE bridge
+// ReceiveTelemetry receives and stores telemetry payload from BLE bridge into MongoDB.
 func ReceiveTelemetry(mongoColl *mongo.Collection) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var input models.BLETelemetryInput
 
 		if err := c.ShouldBindJSON(&input); err != nil {
-			fmt.Println("❌ INVALID JSON FROM BLE BRIDGE:", err)
+			log.Printf("❌ [BLE INGEST ERROR] Invalid JSON payload: %v", err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid payload format"})
 			return
 		}
 
-		fmt.Printf("🌡️ [GO API] Received BLE Telemetry: Device=%s | Temp=%.2f°C | Hum=%.2f%% | Batt=%d%%\n",
+		log.Printf("🌡️ [BLE INGEST] Device=%s | Temp=%.2f°C | Hum=%.2f%% | Batt=%d%%",
 			input.DeviceID, input.Temperature, input.Humidity, input.Battery)
 
 		if mongoColl != nil {
@@ -239,7 +242,12 @@ func ReceiveTelemetry(mongoColl *mongo.Collection) gin.HandlerFunc {
 				"rssi":        input.RSSI,
 				"timestamp":   primitive.NewDateTimeFromTime(time.Unix(input.Timestamp, 0)),
 			}
-			_, _ = mongoColl.InsertOne(ctx, doc)
+
+			if _, err := mongoColl.InsertOne(ctx, doc); err != nil {
+				log.Printf("❌ [MONGO INGEST ERROR] Failed to insert document: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record telemetry data"})
+				return
+			}
 		}
 
 		c.JSON(http.StatusOK, gin.H{"status": "success"})

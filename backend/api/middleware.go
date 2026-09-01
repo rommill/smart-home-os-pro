@@ -1,8 +1,8 @@
 package api
 
 import (
-	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -13,21 +13,27 @@ import (
 	jwt "github.com/golang-jwt/jwt/v5"
 )
 
-// getJWTSecret retrieves secret key from environment variables.
-func getJWTSecret() ([]byte, error) {
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		return nil, errors.New("JWT_SECRET environment variable is missing")
-	}
-	return []byte(secret), nil
+var (
+	jwtSecretOnce sync.Once
+	cachedJWTKey  []byte
+)
+
+// getJWTSecret retrieves and caches the secret key from environment variables.
+// It fails fast (log.Fatalf) if JWT_SECRET is not set.
+func getJWTSecret() []byte {
+	jwtSecretOnce.Do(func() {
+		secret := os.Getenv("JWT_SECRET")
+		if secret == "" {
+			log.Fatalf("FATAL: JWT_SECRET environment variable is missing")
+		}
+		cachedJWTKey = []byte(secret)
+	})
+	return cachedJWTKey
 }
 
 // GenerateJWT creates a signed JWT for an authenticated user.
 func GenerateJWT(userID interface{}, username, role string) (string, error) {
-	jwtKey, err := getJWTSecret()
-	if err != nil {
-		return "", err
-	}
+	jwtKey := getJWTSecret()
 
 	claims := jwt.MapClaims{
 		"user_id":  fmt.Sprintf("%v", userID),
@@ -41,12 +47,23 @@ func GenerateJWT(userID interface{}, username, role string) (string, error) {
 	return token.SignedString(jwtKey)
 }
 
-// CORSMiddleware configures cross-origin resource sharing headers.
+// CORSMiddleware configures cross-origin resource sharing headers securely.
 func CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		allowedOrigin := os.Getenv("ALLOWED_ORIGIN")
-		if allowedOrigin == "" {
-			allowedOrigin = "http://localhost:3000"
+		origin := c.Request.Header.Get("Origin")
+		allowedOriginsEnv := os.Getenv("ALLOWED_ORIGIN")
+		
+		allowedOrigin := "http://localhost:3000"
+		if allowedOriginsEnv != "" {
+			origins := strings.Split(allowedOriginsEnv, ",")
+			for _, o := range origins {
+				if strings.TrimSpace(o) == origin {
+					allowedOrigin = origin
+					break
+				}
+			}
+		} else if origin != "" {
+			allowedOrigin = origin
 		}
 
 		c.Writer.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
@@ -81,12 +98,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		tokenString := parts[1]
-		jwtKey, err := getJWTSecret()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Server authentication config error"})
-			c.Abort()
-			return
-		}
+		jwtKey := getJWTSecret()
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -107,6 +119,7 @@ func AuthMiddleware() gin.HandlerFunc {
 				userIDStr = fmt.Sprintf("%v", val)
 			}
 
+			// Store both keys for backward compatibility across handlers
 			c.Set("userID", userIDStr)
 			c.Set("user_id", userIDStr)
 
@@ -132,26 +145,47 @@ type clientLimiter struct {
 }
 
 var (
-	clients = make(map[string]*clientLimiter)
-	mu      sync.Mutex
+	clients     = make(map[string]*clientLimiter)
+	clientsMu   sync.Mutex
+	cleanupOnce sync.Once
 )
+
+// startCleanupRoutine periodically clears stale rate limiter entries to prevent memory leaks.
+func startCleanupRoutine(window time.Duration) {
+	go func() {
+		for {
+			time.Sleep(window)
+			clientsMu.Lock()
+			for ip, limiter := range clients {
+				if time.Since(limiter.lastSeen) > window {
+					delete(clients, ip)
+				}
+			}
+			clientsMu.Unlock()
+		}
+	}()
+}
 
 // LoginRateLimiter limits repeated auth requests to prevent brute-force attacks.
 func LoginRateLimiter(maxRequests int, window time.Duration) gin.HandlerFunc {
+	cleanupOnce.Do(func() {
+		startCleanupRoutine(window)
+	})
+
 	return func(c *gin.Context) {
 		clientIP := c.ClientIP()
 
-		mu.Lock()
+		clientsMu.Lock()
 		limiter, exists := clients[clientIP]
 		if !exists || time.Since(limiter.lastSeen) > window {
 			clients[clientIP] = &clientLimiter{lastSeen: time.Now(), count: 1}
-			mu.Unlock()
+			clientsMu.Unlock()
 			c.Next()
 			return
 		}
 
 		if limiter.count >= maxRequests {
-			mu.Unlock()
+			clientsMu.Unlock()
 			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many login attempts. Please try again later."})
 			c.Abort()
 			return
@@ -159,7 +193,7 @@ func LoginRateLimiter(maxRequests int, window time.Duration) gin.HandlerFunc {
 
 		limiter.count++
 		limiter.lastSeen = time.Now()
-		mu.Unlock()
+		clientsMu.Unlock()
 
 		c.Next()
 	}
