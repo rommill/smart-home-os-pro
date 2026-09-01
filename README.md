@@ -163,6 +163,7 @@ The frontend includes multi-language support using `i18next`.
 ### Databases
 
 - PostgreSQL
+- MongoDB (Document DB — Telemetry Ingestion & Time-Series Logs)
 - Redis
 - SQLite
 
@@ -372,8 +373,6 @@ go test ./...
 The project uses GitHub Actions for continuous integration.
 
 The CI pipeline automatically validates the project and builds the required components.
-
-[![Smart Home OS Pro CI](https://github.com/rommill/smart-home-os-pro/actions/workflows/ci.yml/badge.svg)](https://github.com/rommill/smart-home-os-pro/actions/workflows/ci.yml)
 
 ---
 
