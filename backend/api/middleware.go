@@ -47,23 +47,29 @@ func GenerateJWT(userID interface{}, username, role string) (string, error) {
 	return token.SignedString(jwtKey)
 }
 
-// CORSMiddleware configures cross-origin resource sharing headers securely.
+// CORSMiddleware configures cross-origin resource sharing headers safely.
 func CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
 		allowedOriginsEnv := os.Getenv("ALLOWED_ORIGIN")
-		
+
+		// Strict default origin for local development
 		allowedOrigin := "http://localhost:3000"
+
 		if allowedOriginsEnv != "" {
 			origins := strings.Split(allowedOriginsEnv, ",")
+			found := false
 			for _, o := range origins {
 				if strings.TrimSpace(o) == origin {
 					allowedOrigin = origin
+					found = true
 					break
 				}
 			}
-		} else if origin != "" {
-			allowedOrigin = origin
+			// Fall back to the first explicit origin if no exact match is found
+			if !found {
+				allowedOrigin = strings.TrimSpace(origins[0])
+			}
 		}
 
 		c.Writer.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
