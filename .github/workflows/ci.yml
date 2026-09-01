@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           java-version: "21"
           distribution: "temurin"
@@ -54,9 +54,9 @@ jobs:
           go vet ./...
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.55.2
+          version: v1.61.0
           working-directory: backend
 
       - name: Run Go Vulnerability Check (govulncheck)
@@ -76,7 +76,7 @@ jobs:
 
       - name: Create mock .env for CI Docker Build
         run: |
-          cp .env.example .env || echo "POSTGRES_USER=postgres\nPOSTGRES_PASSWORD=postgres\nPOSTGRES_DB=smart_home\nJWT_SECRET=ci_test_secret" > .env
+          cp .env.example .env || echo -e "POSTGRES_USER=postgres\nPOSTGRES_PASSWORD=postgres\nPOSTGRES_DB=smart_home\nJWT_SECRET=ci_test_secret" > .env
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
