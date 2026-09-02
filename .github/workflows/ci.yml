@@ -37,10 +37,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Go 1.25
+      - name: Set up Go 1.24
         uses: actions/setup-go@v5
         with:
-          go-version: "1.25"
+          go-version: "1.24"
           cache-dependency-path: backend/go.sum
 
       - name: Execute Go Tests
