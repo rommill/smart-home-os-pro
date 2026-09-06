@@ -5,6 +5,8 @@ networks:
 volumes:
   postgres_data:
   mongo_data:
+  prometheus_data:
+  grafana_data:
 
 services:
   # --- 1. Relational Database ---
@@ -92,3 +94,30 @@ services:
         condition: service_healthy
       broker:
         condition: service_healthy
+
+  # --- 5. Prometheus Monitoring ---
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: smart_prometheus
+    restart: unless-stopped
+    networks:
+      - smart_network
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+
+  # --- 6. Grafana Dashboards ---
+  grafana:
+    image: grafana/grafana:latest
+    container_name: smart_grafana
+    restart: unless-stopped
+    networks:
+      - smart_network
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
