@@ -47,37 +47,20 @@ func GenerateJWT(userID interface{}, username, role string) (string, error) {
 	return token.SignedString(jwtKey)
 }
 
-// CORSMiddleware configures cross-origin resource sharing headers safely.
+// CORSMiddleware configures cross-origin resource sharing headers safely for Gin.
 func CORSMiddleware() gin.HandlerFunc {
+	allowedOrigin := os.Getenv("ALLOWED_ORIGIN")
+	if allowedOrigin == "" {
+		allowedOrigin = "http://localhost:3000"
+	}
+
 	return func(c *gin.Context) {
-		origin := c.Request.Header.Get("Origin")
-		allowedOriginsEnv := os.Getenv("ALLOWED_ORIGIN")
-
-		// Strict default origin for local development
-		allowedOrigin := "http://localhost:3000"
-
-		if allowedOriginsEnv != "" {
-			origins := strings.Split(allowedOriginsEnv, ",")
-			found := false
-			for _, o := range origins {
-				if strings.TrimSpace(o) == origin {
-					allowedOrigin = origin
-					found = true
-					break
-				}
-			}
-			// Fall back to the first explicit origin if no exact match is found
-			if !found {
-				allowedOrigin = strings.TrimSpace(origins[0])
-			}
-		}
-
 		c.Writer.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
 
-		if c.Request.Method == "OPTIONS" {
+		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}

@@ -17,15 +17,17 @@ services:
     networks:
       - smart_network
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: smart_password
-      POSTGRES_DB: smart_home_db
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-smart_password}
+      POSTGRES_DB: ${POSTGRES_DB:-smart_home_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d smart_home_db"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-smart_home_db}",
+        ]
       interval: 3s
       timeout: 3s
       retries: 5
@@ -37,8 +39,6 @@ services:
     restart: unless-stopped
     networks:
       - smart_network
-    ports:
-      - "27017:27017"
     volumes:
       - mongo_data:/data/db
     healthcheck:
@@ -81,12 +81,13 @@ services:
       - "8080:8080"
     environment:
       - TZ=Europe/Tallinn
-      - PORT=8080
-      - POSTGRES_URL=postgresql://admin:smart_password@db_relational:5432/smart_home_db?sslmode=disable
-      - MONGO_URI=mongodb://db_nosql:27017
-      - MQTT_BROKER=tcp://broker:1883
-      - GO_BACKEND_URL=http://backend_go:8080/api/v1/telemetry
-      - JWT_SECRET=super_secret_smart_home_jwt_key_2026
+      - PORT=${PORT:-8080}
+      - POSTGRES_URL=${POSTGRES_URL}
+      - MONGO_URI=${MONGO_URI}
+      - MQTT_BROKER=${MQTT_BROKER}
+      - GO_BACKEND_URL=${GO_BACKEND_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - ALLOWED_ORIGIN=${ALLOWED_ORIGIN:-http://localhost:3000}
     depends_on:
       db_relational:
         condition: service_healthy
