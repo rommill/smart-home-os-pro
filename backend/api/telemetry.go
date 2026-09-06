@@ -56,7 +56,9 @@ func GetTelemetry(db *sql.DB, mongoColl *mongo.Collection) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize transaction"})
 			return
 		}
-		defer tx.Rollback()
+		defer func() {
+    _ = tx.Rollback()
+}()
 
 		userIDStr := fmt.Sprintf("%v", userID)
 		if _, err := tx.ExecContext(ctx, "SELECT set_config('app.current_user_id', $1, true)", userIDStr); err != nil {
@@ -178,7 +180,9 @@ func UpdateTargetTemperature(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize transaction"})
 			return
 		}
-		defer tx.Rollback()
+		defer func() {
+    _ = tx.Rollback()
+}()
 
 		userIDStr := fmt.Sprintf("%v", userID)
 		if _, err := tx.ExecContext(ctx, "SELECT set_config('app.current_user_id', $1, true)", userIDStr); err != nil {
