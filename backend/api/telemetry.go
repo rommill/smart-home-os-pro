@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"smart-home/metrics"
 	"smart-home/models"
 
 	"github.com/gin-gonic/gin"
@@ -57,8 +58,8 @@ func GetTelemetry(db *sql.DB, mongoColl *mongo.Collection) gin.HandlerFunc {
 			return
 		}
 		defer func() {
-    _ = tx.Rollback()
-}()
+			_ = tx.Rollback()
+		}()
 
 		userIDStr := fmt.Sprintf("%v", userID)
 		if _, err := tx.ExecContext(ctx, "SELECT set_config('app.current_user_id', $1, true)", userIDStr); err != nil {
@@ -181,8 +182,8 @@ func UpdateTargetTemperature(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 		defer func() {
-    _ = tx.Rollback()
-}()
+			_ = tx.Rollback()
+		}()
 
 		userIDStr := fmt.Sprintf("%v", userID)
 		if _, err := tx.ExecContext(ctx, "SELECT set_config('app.current_user_id', $1, true)", userIDStr); err != nil {
@@ -253,6 +254,10 @@ func ReceiveTelemetry(mongoColl *mongo.Collection) gin.HandlerFunc {
 				return
 			}
 		}
+
+		// [EN] Increment total processed telemetry metrics
+		// [RU] Инкрементируем счётчик обработанной телеметрии
+		metrics.ProcessedTelemetryTotal.Inc()
 
 		c.JSON(http.StatusOK, gin.H{"status": "success"})
 	}
