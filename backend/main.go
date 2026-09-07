@@ -20,11 +20,10 @@ import (
 )
 
 func main() {
-	// Fail-Fast validation for required environment variables
 	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" {
-		log.Fatal("FATAL SECURITY ERROR: JWT_SECRET environment variable is not set. Refusing to start.")
-	}
+if jwtSecret == "" || jwtSecret == "change_me_in_production" {
+    log.Fatal("FATAL: JWT_SECRET is not set or using insecure default value!")
+}
 
 	postgresURL := os.Getenv("POSTGRES_URL")
 	if postgresURL == "" {
@@ -45,7 +44,8 @@ func main() {
 	_ = mqtt.InitMQTT(mongoColl, pgDB)
 
 	r := gin.Default()
-	r.Use(api.CORSMiddleware())
+r.Use(api.PrometheusMiddleware())
+r.Use(api.CORSMiddleware())
 
 	// --- Healthcheck & Readiness Probes ---
 

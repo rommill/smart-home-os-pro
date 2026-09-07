@@ -52,21 +52,13 @@ services:
     image: eclipse-mosquitto:2.0
     container_name: smart_mqtt
     restart: unless-stopped
-    networks:
-      - smart_network
     ports:
       - "1883:1883"
-    entrypoint:
-      [
-        "sh",
-        "-c",
-        "echo 'listener 1883\nallow_anonymous true' > /tmp/mosquitto.conf && exec mosquitto -c /tmp/mosquitto.conf",
-      ]
-    healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 1883 || exit 1"]
-      interval: 3s
-      timeout: 3s
-      retries: 5
+    volumes:
+      - ./backend/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - ./backend/mosquitto/password_file:/mosquitto/config/password_file
+    networks:
+      - smart_network
 
   # --- 4. Go Backend Service ---
   backend_go:
@@ -88,12 +80,12 @@ services:
       - GO_BACKEND_URL=${GO_BACKEND_URL}
       - JWT_SECRET=${JWT_SECRET}
       - ALLOWED_ORIGIN=${ALLOWED_ORIGIN:-http://localhost:3000}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
     depends_on:
       db_relational:
         condition: service_healthy
       db_nosql:
-        condition: service_healthy
-      broker:
         condition: service_healthy
 
   # --- 5. Prometheus Monitoring ---

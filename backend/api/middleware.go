@@ -5,9 +5,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"smart-home/metrics"
 
 	"github.com/gin-gonic/gin"
 	jwt "github.com/golang-jwt/jwt/v5"
@@ -66,6 +69,23 @@ func CORSMiddleware() gin.HandlerFunc {
 		}
 
 		c.Next()
+	}
+}
+
+// PrometheusMiddleware measures HTTP request duration for Prometheus metrics.
+func PrometheusMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+
+		duration := time.Since(start).Seconds()
+		status := strconv.Itoa(c.Writer.Status())
+		method := c.Request.Method
+		path := c.FullPath()
+
+		if path != "" {
+			metrics.HTTPRequestDuration.WithLabelValues(method, path, status).Observe(duration)
+		}
 	}
 }
 
