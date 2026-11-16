@@ -1,23 +1,15 @@
 import { t } from "../i18n/i18n.js";
 
-/**
- * Climate Control Slider Component
- * Generates interactive target temperature controls for a specific room instance.
- * * @param roomId - Unique identifier of the room managed by PostgreSQL
- * @param targetTemp - Target baseline temperature constraints
- * @returns Fully compiled dynamic HTML string template
- */
 export function renderClimateControlPanel(
   roomId: number,
   targetTemp: number,
 ): string {
-  // Fetch translated label dynamically during virtual tree parsing
   const labelText: string = t("targetTemp");
 
   return `
-    <div class="climate-control max-h-0 group-[.is-active]:max-h-40 overflow-hidden transition-all duration-500 ease-in-out border-t border-transparent group-[.is-active]:border-slate-100 group-[.is-active]:dark:border-slate-800/50 group-[.is-active]:mt-2">
-        <div class="pt-4">
-            <div class="flex justify-between items-center mb-2">
+    <div class="climate-control overflow-hidden transition-all duration-500 ease-in-out border-t border-slate-100 dark:border-slate-800/50 mt-2">
+        <div class="pt-3">
+            <div class="flex justify-between items-center mb-1.5">
                 <span data-i18n="targetTemp" class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">${labelText}</span>
                 <span class="text-sm font-mono font-bold text-sky-500 dark:text-sky-400" id="target-val-${roomId}">${targetTemp}°C</span>
             </div>

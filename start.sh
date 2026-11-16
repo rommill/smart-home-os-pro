@@ -10,7 +10,10 @@ trap cleanup SIGINT SIGTERM EXIT
 
 echo "🚀 Starting Smart Home OS Pro environment..."
 
-# Освобождаем порты 8080 и 5500
+echo "🐳 Starting Docker infrastructure..."
+docker compose up -d
+sleep 3 
+
 for PORT in 8080 5500; do
     PORT_PID=$(lsof -ti:$PORT)
     if [ -n "$PORT_PID" ]; then
@@ -21,7 +24,7 @@ done
 
 # 1. Go Backend
 echo "📦 Starting Go Backend..."
-(cd backend && go run main.go) &
+(cd backend && JWT_SECRET=super_secret_smart_home_jwt_key_2026 POSTGRES_URL="postgresql://admin:smart_password@localhost:5432/smart_home_db?sslmode=disable" go run main.go) &
 sleep 2
 
 # 2. BLE Bridge
@@ -32,6 +35,12 @@ python ble_bridge.py &
 if [ -d "frontend" ]; then
     echo "💻 Starting React Frontend via pnpm..."
     (cd frontend && pnpm dev) &
+fi
+
+# 4. Climate Emulator
+if [ -f "climate_emulator.py" ]; then
+    echo "🌡️ Starting Climate Emulator..."
+    ./venv/bin/python3 climate_emulator.py &
 fi
 
 echo "✅ All services started! Press Ctrl+C to stop all."

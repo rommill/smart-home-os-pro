@@ -1,0 +1,15 @@
+# RU: Конфигурация автоматического импорта JSON дашбордов
+# EN: Configuration for automatic JSON dashboard importing
+apiVersion: 1
+
+providers:
+  - name: "Smart Home Dashboards"
+    orgId: 1
+    folder: "Smart Home OS"
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      # RU: Путь внутри контейнера Grafana к JSON-файлам
+      # EN: Path inside the Grafana container to JSON files
+      path: /etc/grafana/provisioning/dashboards/json

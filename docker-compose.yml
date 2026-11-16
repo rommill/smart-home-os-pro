@@ -14,6 +14,8 @@ services:
     image: postgres:16-alpine
     container_name: smart_postgres
     restart: unless-stopped
+    ports:
+      - "5432:5432" # <-- Добавили проброс порта наружу
     networks:
       - smart_network
     environment:
@@ -37,6 +39,8 @@ services:
     image: mongo:7-jammy
     container_name: smart_mongo
     restart: unless-stopped
+    ports:
+      - "27017:27017"
     networks:
       - smart_network
     volumes:
@@ -79,9 +83,8 @@ services:
       - MQTT_BROKER=${MQTT_BROKER}
       - GO_BACKEND_URL=${GO_BACKEND_URL}
       - JWT_SECRET=${JWT_SECRET}
+      - SERVICE_API_KEY=secret_emulator_key_123
       - ALLOWED_ORIGIN=${ALLOWED_ORIGIN:-http://localhost:3000}
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
     depends_on:
       db_relational:
         condition: service_healthy
@@ -108,8 +111,14 @@ services:
     restart: unless-stopped
     networks:
       - smart_network
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards/json
     ports:
       - "3000:3000"
     depends_on:

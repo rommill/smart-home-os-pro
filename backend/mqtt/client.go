@@ -10,11 +10,15 @@ import (
 	"strings"
 	"time"
 
+	"smart-home/api"
+	"smart-home/metrics"
+
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // TelemetryPayload represents incoming sensor metrics from devices
+// RU: TelemetryPayload представляет входящие метрики с датчиков устройств
 type TelemetryPayload struct {
 	DeviceID   string                 `json:"device_id" bson:"device_id"`
 	SensorType string                 `json:"sensor_type" bson:"sensor_type"`
@@ -27,6 +31,7 @@ type TelemetryPayload struct {
 var (
 	mongoCollection *mongo.Collection
 	postgresDB      *sql.DB
+	wsHub           *api.Hub // RU: Ссылка на WebSocket Hub для трансляции данных / EN: Reference to WebSocket Hub for broadcasting
 )
 
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
@@ -44,7 +49,26 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 	log.Printf("📡 [MQTT Received] Topic: %s | Device: %s | %s: %.2f %s",
 		msg.Topic(), payload.DeviceID, payload.SensorType, payload.Value, payload.Unit)
 
+	// Извлекаем имя комнаты из топика (например, "home/Bedroom/telemetry" -> "Bedroom")
+	// EN: Extract room name from topic "home/Bedroom/telemetry"
+	parts := strings.Split(msg.Topic(), "/")
+	roomName := "Unknown"
+	if len(parts) >= 2 {
+		roomName = parts[1]
+	}
+
+	// 0. Обновление Prometheus-метрики для Grafana
+	// EN: 0. Update Prometheus metrics for Grafana dashboard
+	metrics.ProcessedTelemetryTotal.Inc()
+
+	if payload.SensorType == "temperature" {
+		metrics.RoomTemperature.WithLabelValues(roomName).Set(payload.Value)
+	} else if payload.SensorType == "humidity" {
+		metrics.RoomHumidity.WithLabelValues(roomName).Set(payload.Value)
+	}
+
 	// 1. Сохранение сырой телеметрии в MongoDB (история)
+	// EN: 1. Save raw telemetry to MongoDB (history)
 	if mongoCollection != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -58,18 +82,15 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 	}
 
 	// 2. Обновление текущего состояния комнаты в PostgreSQL (для фронтенда)
+	// EN: 2. Update current room state in PostgreSQL (for frontend)
 	if postgresDB != nil && payload.SensorType == "temperature" {
-		// Извлекаем имя комнаты из топика "home/Living Room/telemetry"
-		parts := strings.Split(msg.Topic(), "/")
 		if len(parts) >= 2 {
-			roomName := parts[1] // "Living Room" или "Bedroom"
 			tempStr := fmt.Sprintf("%.1f", payload.Value)
 
-			// Ищем комнату по имени (в JSON-поле name->>'en' или name->>'ru' или полю name)
 			query := `
 				UPDATE rooms 
 				SET temperature = $1, last_update = NOW() 
-				WHERE name->>'en' = $2 OR name->>'ru' = $2
+				WHERE name = $2 OR name->>'en' = $2 OR name->>'ru' = $2
 			`
 			res, err := postgresDB.Exec(query, tempStr, roomName)
 			if err != nil {
@@ -81,6 +102,13 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 				}
 			}
 		}
+	}
+
+	// 3. Отправка полученной телеметрии подключенным по WebSocket клиентам в реальном времени
+	// EN: 3. Broadcast received telemetry to connected WebSocket clients in real time
+	if wsHub != nil {
+		wsHub.BroadcastTelemetry(payload)
+		log.Printf("⚡ [WebSocket Broadcast] Sent live metric for device: %s", payload.DeviceID)
 	}
 }
 
@@ -101,10 +129,12 @@ var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err
 	log.Printf("⚠️ [MQTT Warning] Connection lost: %v", err)
 }
 
-// InitMQTT принимает параметры для Mongo и Postgres
-func InitMQTT(coll *mongo.Collection, db *sql.DB) mqtt.Client {
+// InitMQTT принимает параметры для Mongo, Postgres и WebSocket Hub
+// EN: InitMQTT accepts parameters for Mongo, Postgres, and WebSocket Hub
+func InitMQTT(coll *mongo.Collection, db *sql.DB, hub *api.Hub) mqtt.Client {
 	mongoCollection = coll
 	postgresDB = db
+	wsHub = hub
 
 	brokerURL := os.Getenv("MQTT_BROKER")
 	if brokerURL == "" {

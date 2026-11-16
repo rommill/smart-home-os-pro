@@ -52,24 +52,32 @@ func GenerateJWT(userID interface{}, username, role string) (string, error) {
 
 // CORSMiddleware configures cross-origin resource sharing headers safely for Gin.
 func CORSMiddleware() gin.HandlerFunc {
-	allowedOrigin := os.Getenv("ALLOWED_ORIGIN")
-	if allowedOrigin == "" {
-		allowedOrigin = "http://localhost:3000"
-	}
+    allowedOrigin := os.Getenv("ALLOWED_ORIGIN")
+    if allowedOrigin == "" {
+        allowedOrigin = "http://localhost:5500" 
+    }
 
-	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
+    return func(c *gin.Context) {
+        origin := c.Request.Header.Get("Origin")
 
-		if c.Request.Method == http.MethodOptions {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
-		}
+        
+        if origin == "http://localhost:5500" || origin == "http://localhost:3000" {
+            c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+        } else {
+            c.Writer.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+        }
 
-		c.Next()
-	}
+        c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+        c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+        c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
+
+        if c.Request.Method == http.MethodOptions {
+            c.AbortWithStatus(http.StatusNoContent)
+            return
+        }
+
+        c.Next()
+    }
 }
 
 // PrometheusMiddleware measures HTTP request duration for Prometheus metrics.
@@ -206,4 +214,22 @@ func LoginRateLimiter(maxRequests int, window time.Duration) gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+// RU: Middleware для авторизации системных сервисов и эмуляторов по статическому API-ключу
+// EN: Middleware for authorizing system services and emulators via a static API key
+func ServiceAuthMiddleware() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        apiKey := c.GetHeader("X-API-Key")
+        expectedKey := os.Getenv("SERVICE_API_KEY")
+        if expectedKey == "" {
+            expectedKey = "secret_emulator_key_123" // RU: Дефолт для разработки / EN: Development default
+        }
+
+        if apiKey != expectedKey {
+            c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized service key"})
+            c.Abort()
+            return
+        }
+        c.Next()
+    }
 }

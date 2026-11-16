@@ -1,0 +1,13 @@
+# RU: Конфигурация источника данных Prometheus для Grafana
+# EN: Prometheus datasource configuration for Grafana
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    # RU: Обращаемся к контейнеру prometheus по внутреннему имени сети Docker
+    # EN: Connect to prometheus container using internal Docker network hostname
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
