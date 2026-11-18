@@ -156,7 +156,7 @@ func main() {
 
 	// --- Public Endpoints ---
 	r.POST("/login", api.LoginRateLimiter(5, 1*time.Minute), api.Login(pgDB))
-	r.POST("/api/v1/telemetry", api.ReceiveTelemetry(mongoColl))
+	r.POST("/api/v1/telemetry", api.PostTelemetry(mongoColl))
 
 	// --- Service / Emulator Endpoints (Protected by API Key) ---
 	// RU: Эндпоинты для фоновых сервисов и эмуляторов, защищенные системным API-ключом
