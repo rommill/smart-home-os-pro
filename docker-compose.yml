@@ -1,7 +1,11 @@
+version: "3.8"
+
+# --- Networks / Сети ---
 networks:
   smart_network:
     driver: bridge
 
+# --- Volumes / Тома для хранения данных ---
 volumes:
   postgres_data:
   mongo_data:
@@ -9,13 +13,15 @@ volumes:
   grafana_data:
 
 services:
-  # --- 1. Relational Database ---
+  # --- 1. Relational Database / Реляционная база данных (PostgreSQL) ---
   db_relational:
     image: postgres:16-alpine
     container_name: smart_postgres
     restart: unless-stopped
     ports:
-      - "5432:5432" # <-- Добавили проброс порта наружу
+      # Проброс порта для локальной отладки и миграций
+      # Port forwarding for local debugging and migrations
+      - "5432:5432"
     networks:
       - smart_network
     environment:
@@ -34,12 +40,14 @@ services:
       timeout: 3s
       retries: 5
 
-  # --- 2. NoSQL Database ---
+  # --- 2. NoSQL Database / NoSQL база данных (MongoDB) ---
   db_nosql:
     image: mongo:7-jammy
     container_name: smart_mongo
     restart: unless-stopped
     ports:
+      # Проброс порта для работы с сырыми логами и телеметрией
+      # Port forwarding for raw logs and telemetry handling
       - "27017:27017"
     networks:
       - smart_network
@@ -51,20 +59,22 @@ services:
       timeout: 3s
       retries: 5
 
-  # --- 3. MQTT Broker ---
+  # --- 3. MQTT Broker / Брокер MQTT (Eclipse Mosquitto) ---
   broker:
     image: eclipse-mosquitto:2.0
     container_name: smart_mqtt
     restart: unless-stopped
     ports:
-      - "1883:1883"
+      # Безопасность: доступ только с хоста (127.0.0.1), наружу из интернета порт закрыт
+      # Security: access only from host (127.0.0.1), external internet access is closed
+      - "127.0.0.1:1883:1883"
     volumes:
       - ./backend/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
       - ./backend/mosquitto/password_file:/mosquitto/config/password_file
     networks:
       - smart_network
 
-  # --- 4. Go Backend Service ---
+  # --- 4. Go Backend Service / Сервис бэкенда на Go ---
   backend_go:
     build:
       context: ./backend
@@ -74,6 +84,8 @@ services:
     networks:
       - smart_network
     ports:
+      # Основной API-порт бэкенда
+      # Main backend API port
       - "8080:8080"
     environment:
       - TZ=Europe/Tallinn
@@ -81,6 +93,9 @@ services:
       - POSTGRES_URL=${POSTGRES_URL}
       - MONGO_URI=${MONGO_URI}
       - MQTT_BROKER=${MQTT_BROKER}
+      # MQTT Credentials / Учетные данные для авторизации в MQTT брокере
+      - MQTT_USER=${MQTT_USER:-smart_user}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-smart_secure_password}
       - GO_BACKEND_URL=${GO_BACKEND_URL}
       - JWT_SECRET=${JWT_SECRET}
       - SERVICE_API_KEY=secret_emulator_key_123
@@ -91,7 +106,7 @@ services:
       db_nosql:
         condition: service_healthy
 
-  # --- 5. Prometheus Monitoring ---
+  # --- 5. Prometheus Monitoring / Мониторинг метрик (Prometheus) ---
   prometheus:
     image: prom/prometheus:latest
     container_name: smart_prometheus
@@ -104,7 +119,7 @@ services:
     ports:
       - "9090:9090"
 
-  # --- 6. Grafana Dashboards ---
+  # --- 6. Grafana Dashboards / Дашборды визуализации (Grafana) ---
   grafana:
     image: grafana/grafana:latest
     container_name: smart_grafana
