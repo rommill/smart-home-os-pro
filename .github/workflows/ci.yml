@@ -7,7 +7,6 @@ on:
     branches: [main, master]
 
 jobs:
-  # 1. Spring Boot (Java 21) Unit & Integration Testing
   test-spring:
     name: Build & Test Spring Boot Backend
     runs-on: ubuntu-latest
@@ -28,7 +27,6 @@ jobs:
       - name: Execute Gradle Tests
         run: ./backend-spring/gradlew -p backend-spring test
 
-  # 2. Go Telemetry Engine Testing, Linting & Security Scan
   test-go:
     name: Test & Scan Go Telemetry Engine
     runs-on: ubuntu-latest
@@ -64,7 +62,6 @@ jobs:
           cd backend
           govulncheck ./... || echo "govulncheck completed with advisories"
 
-  # 3. Validate Multi-Container Docker Build
   docker-build:
     name: Validate Docker Compose Stack
     needs: [test-spring, test-go]
@@ -78,23 +75,22 @@ jobs:
           if [ -f .env.example ]; then
             cp .env.example .env
           else
-            cat <<'ENVEOF' > .env
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=ci_test_postgres_password
-POSTGRES_DB=smart_home_db
-POSTGRES_URL=postgresql://postgres:ci_test_postgres_password@db_relational:5432/smart_home_db?sslmode=disable
-MONGO_URI=mongodb://db_nosql:27017
-MQTT_BROKER=tcp://broker:1883
-MQTT_USER=ci_mqtt_user
-MQTT_PASSWORD=ci_test_mqtt_password
-PORT=8080
-GO_BACKEND_URL=http://backend_go:8080/api/v1/telemetry
-JWT_SECRET=ci_test_jwt_secret_key_change_in_prod
-SERVICE_API_KEY=ci_test_service_api_key_change_in_prod
-ALLOWED_ORIGIN=http://localhost:5500
-GF_SECURITY_ADMIN_USER=admin
-GF_SECURITY_ADMIN_PASSWORD=ci_test_grafana_password
-ENVEOF
+            printf '%s\n' \
+              'POSTGRES_USER=postgres' \
+              'POSTGRES_PASSWORD=ci_test_postgres_password' \
+              'POSTGRES_DB=smart_home_db' \
+              'POSTGRES_URL=postgresql://postgres:ci_test_postgres_password@db_relational:5432/smart_home_db?sslmode=disable' \
+              'MONGO_URI=mongodb://db_nosql:27017' \
+              'MQTT_BROKER=tcp://broker:1883' \
+              'MQTT_USER=ci_mqtt_user' \
+              'MQTT_PASSWORD=ci_test_mqtt_password' \
+              'PORT=8080' \
+              'GO_BACKEND_URL=http://backend_go:8080/api/v1/telemetry' \
+              'JWT_SECRET=ci_test_jwt_secret_key_change_in_prod' \
+              'SERVICE_API_KEY=ci_test_service_api_key_change_in_prod' \
+              'ALLOWED_ORIGIN=http://localhost:5500' \
+              'GF_SECURITY_ADMIN_USER=admin' \
+              'GF_SECURITY_ADMIN_PASSWORD=ci_test_grafana_password' > .env
           fi
 
       - name: Set up Docker Buildx
